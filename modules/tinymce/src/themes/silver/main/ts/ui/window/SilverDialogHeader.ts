@@ -6,6 +6,7 @@ import { SelectorFind } from '@ephox/sugar';
 
 import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
 import { formCancelEvent } from '../general/FormEvents';
+import { modalFullscreenEvent } from '../general/ModalEvents';
 import * as Icons from '../icons/Icons';
 import { titleChannel } from './DialogChannels';
 
@@ -31,6 +32,24 @@ const renderClose = (providersBackstage: UiFactoryBackstageProviders) => Button.
   ],
   action: (comp) => {
     AlloyTriggers.emit(comp, formCancelEvent);
+  }
+});
+
+const renderFullscreen = (providersBackstage: UiFactoryBackstageProviders) => Button.sketch({
+  dom: {
+    tag: 'button',
+    classes: [ 'tox-button', 'tox-button--icon', 'tox-button--naked' ],
+    attributes: {
+      'type': 'button',
+      'aria-label': providersBackstage.translate('Fullscreen'),
+      'title': providersBackstage.translate('Fullscreen') // TODO tooltips: AP-213
+    }
+  },
+  components: [
+    Icons.render('fullscreen', { tag: 'div', classes: [ 'tox-icon' ] }, providersBackstage.icons)
+  ],
+  action: (comp) => {
+    AlloyTriggers.emit(comp, modalFullscreenEvent);
   }
 });
 
@@ -74,6 +93,7 @@ const renderInlineHeader = (
   dom: DomFactory.fromHtml('<div class="tox-dialog__header"></div>'),
   components: [
     renderTitle(spec, dialogId, Optional.some(titleId), providersBackstage),
+    renderFullscreen(providersBackstage),
     renderDragHandle(),
     renderClose(providersBackstage)
   ],
@@ -98,6 +118,10 @@ const renderModalHeader = (spec: WindowHeaderSpec, dialogId: string, providersBa
     renderTitle(spec, dialogId, Optional.none(), providersBackstage)
   );
 
+  const pFullscreen = ModalDialog.parts.fullscreen(
+    renderFullscreen(providersBackstage)
+  );
+
   const pHandle = ModalDialog.parts.draghandle(
     renderDragHandle()
   );
@@ -106,7 +130,7 @@ const renderModalHeader = (spec: WindowHeaderSpec, dialogId: string, providersBa
     renderClose(providersBackstage)
   );
 
-  const components = [ pTitle ].concat(spec.draggable ? [ pHandle ] : []).concat([ pClose ]);
+  const components = [ pTitle, pFullscreen ].concat(spec.draggable ? [ pHandle ] : []).concat([ pClose ]);
   return Container.sketch({
     dom: DomFactory.fromHtml('<div class="tox-dialog__header"></div>'),
     components

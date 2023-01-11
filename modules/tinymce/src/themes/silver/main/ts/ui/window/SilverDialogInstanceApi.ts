@@ -37,6 +37,7 @@ export interface DialogAccess {
   getBody: () => AlloyComponent;
   getFooter: () => AlloyComponent;
   getFormWrapper: () => AlloyComponent;
+  toggleFullscreen: () => void;
 }
 
 const getDialogApi = <T extends Dialog.DialogData>(
@@ -149,6 +150,7 @@ const getDialogApi = <T extends Dialog.DialogData>(
     block,
     unblock,
     showTab,
+    toggleFullscreen: access.toggleFullscreen,
     redial,
     close
   };

@@ -55,6 +55,12 @@ const parts: () => PartType.PartTypeAdt[] = Fun.constant([
     name: 'title'
   }),
 
+  PartType.optional<ModalDialogDetail>({
+    factory: basic,
+    schema: [ FieldSchema.required('dom') ],
+    name: 'fullscreen'
+  }),
+
   PartType.required<ModalDialogDetail>({
     factory: basic,
     schema: [ FieldSchema.required('dom') ],

@@ -14,6 +14,7 @@ export interface DialogInstanceApi<T extends DialogData> {
   setEnabled: (name: string, state: boolean) => void;
   focus: (name: string) => void;
   showTab: (name: string) => void;
+  toggleFullscreen: () => void;
   redial: (nu: DialogSpec<T>) => void;
   block: (msg: string) => void;
   unblock: () => void;

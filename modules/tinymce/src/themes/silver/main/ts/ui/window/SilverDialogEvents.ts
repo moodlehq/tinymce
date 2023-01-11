@@ -9,6 +9,7 @@ import {
   formCloseEvent,
   FormSubmitEvent, formSubmitEvent, formTabChangeEvent, FormTabChangeEvent, formUnblockEvent, FormUnblockEvent
 } from '../general/FormEvents';
+import { modalFullscreenEvent, ModalFullscreenEvent } from '../general/ModalEvents';
 import * as NavigableObject from '../general/NavigableObject';
 
 export interface ExtraListeners {
@@ -120,6 +121,10 @@ const initDialog = <T extends Dialog.DialogData>(getInstanceApi: () => Dialog.Di
 
     fireApiEvent<FormTabChangeEvent>(formTabChangeEvent, (api, spec, event) => {
       spec.onTabChange(api, { newTabName: event.name, oldTabName: event.oldName });
+    }),
+
+    fireApiEvent<ModalFullscreenEvent>(modalFullscreenEvent, (api) => {
+      api.toggleFullscreen();
     }),
 
     // When the dialog is being closed, store the current state of the form
