@@ -42,6 +42,7 @@ export interface UrlDialogSpec {
   url: string;
   height?: number;
   width?: number;
+  headerButtons?: UrlDialogFooterButton[];
   buttons?: UrlDialogFooterButtonSpec[];
 
   // Gets fired when a custom button is clicked
@@ -63,6 +64,7 @@ export interface UrlDialog {
   height: Optional<number>;
   width: Optional<number>;
   buttons: Optional<UrlDialogFooterButton[]>;
+  headerButtons: UrlDialogFooterButton[];
 
   onAction: UrlDialogActionHandler;
   onClose: UrlDialogCloseHandler;
@@ -80,6 +82,7 @@ export const urlDialogSchema = StructureSchema.objOf([
   FieldSchema.requiredString('url'),
   FieldSchema.optionNumber('height'),
   FieldSchema.optionNumber('width'),
+  FieldSchema.optionArrayOf('headerButtons', urlDialogButtonSchema),
   FieldSchema.optionArrayOf('buttons', urlDialogButtonSchema),
   FieldSchema.defaultedFunction('onAction', Fun.noop),
   FieldSchema.defaultedFunction('onCancel', Fun.noop),

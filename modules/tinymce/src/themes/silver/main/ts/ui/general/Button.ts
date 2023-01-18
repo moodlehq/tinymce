@@ -16,12 +16,14 @@ import { getFetch, renderMenuButton, StoredMenuButton } from '../button/MenuButt
 import { componentRenderPipeline } from '../menus/item/build/CommonMenuItem';
 import { ToolbarButtonClasses } from '../toolbar/button/ButtonClasses';
 import { formActionEvent, formCancelEvent, formSubmitEvent } from './FormEvents';
+import { modalFullscreenEvent } from './ModalEvents';
 
 type Behaviours = Behaviour.NamedConfiguredBehaviour<any, any, any>[];
 type AlloyButtonSpec = Parameters<typeof AlloyButton['sketch']>[0];
 
 type ButtonSpec = Omit<Dialog.Button, 'type'>;
 type FooterButtonSpec = Omit<Dialog.DialogFooterNormalButton, 'type'> | Omit<Dialog.DialogFooterMenuButton, 'type'>;
+type HeaderButtonSpec = Omit<Dialog.DialogHeaderNormalButton, 'type'> | Omit<Dialog.DialogFooterMenuButton, 'type'>;
 
 export interface IconButtonWrapper extends Omit<ButtonSpec, 'text'> {
   readonly tooltip: Optional<string>;
@@ -160,6 +162,8 @@ const getAction = (name: string, buttonType: string) => (comp: AlloyComponent) =
     AlloyTriggers.emit(comp, formSubmitEvent);
   } else if (buttonType === 'cancel') {
     AlloyTriggers.emit(comp, formCancelEvent);
+  } else if (buttonType === 'fullscreen') {
+    AlloyTriggers.emit(comp, modalFullscreenEvent);
   } else {
     // eslint-disable-next-line no-console
     console.error('Unknown button type: ', buttonType);
@@ -202,6 +206,54 @@ export const renderFooterButton = (spec: FooterButtonSpec, buttonType: string, b
     // eslint-disable-next-line no-console
     console.error('Unknown footer button type: ', buttonType);
     throw new Error('Unknown footer button type');
+  }
+};
+
+const isNormalHeaderButtonSpec = (spec: FooterButtonSpec, buttonType: string): spec is Dialog.DialogFooterNormalButton =>
+  isNormalFooterButtonSpec(spec, buttonType);
+const isIconHeaderButtonSpec = (spec: HeaderButtonSpec, buttonType: string): spec is Dialog.DialogFooterNormalButton => buttonType === 'fullscreen';
+
+export const renderHeaderButton = (spec: HeaderButtonSpec, buttonType: string, backstage: UiFactoryBackstage): SimpleOrSketchSpec => {
+  if (isMenuFooterButtonSpec(spec, buttonType)) {
+    const getButton = () => memButton;
+
+    const menuButtonSpec = spec as StoredMenuButton;
+
+    const fixedSpec: Toolbar.ToolbarMenuButton = {
+      ...spec,
+      type: 'menubutton',
+      // Currently, dialog-based menu buttons cannot be searchable.
+      search: Optional.none(),
+      onSetup: (api) => {
+        api.setEnabled(spec.enabled);
+        return Fun.noop;
+      },
+      fetch: getFetch(menuButtonSpec.items, getButton, backstage)
+    };
+
+    const memButton = Memento.record(renderMenuButton(fixedSpec, ToolbarButtonClasses.Button, backstage, Optional.none()));
+
+    return memButton.asSpec();
+  } else if (isNormalHeaderButtonSpec(spec, buttonType)) {
+    const action = getAction(spec.name, buttonType);
+    const buttonSpec = {
+      ...spec,
+      borderless: false
+    };
+    return renderButton(buttonSpec, action, backstage.shared.providers, [ ]);
+  } else if (isIconHeaderButtonSpec(spec, buttonType)) {
+    const action = getAction(spec.name, buttonType);
+    const buttonSpec: IconButtonWrapper = {
+      ...spec,
+      tooltip: Optional.some(spec.text),
+      icon: Optional.some(spec.name),
+      borderless: false
+    };
+    return renderIconButton(buttonSpec, action, backstage.shared.providers, [ ]);
+  } else {
+    // eslint-disable-next-line no-console
+    console.error('Unknown header button type: ', buttonType);
+    throw new Error('Unknown header button type');
   }
 };
 

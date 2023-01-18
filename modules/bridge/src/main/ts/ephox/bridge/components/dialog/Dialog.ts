@@ -2,6 +2,7 @@ import { FieldSchema, StructureSchema } from '@ephox/boulder';
 import { Fun, Result } from '@ephox/katamari';
 
 import * as FooterButton from './DialogFooterButton';
+import * as FooterHeader from './DialogHeaderButton';
 import * as Panel from './Panel';
 import * as TabPanel from './TabPanel';
 
@@ -47,6 +48,7 @@ export interface DialogSpec<T extends DialogData> {
   title: string;
   size?: DialogSize;
   body: TabPanel.TabPanelSpec | Panel.PanelSpec;
+  headerButtons?: FooterHeader.DialogHeaderButtonSpec[];
   buttons: FooterButton.DialogFooterButtonSpec[];
   initialData?: Partial<T>;
 
@@ -73,6 +75,7 @@ export interface Dialog<T extends DialogData> {
   title: string;
   size: DialogSize;
   body: TabPanel.TabPanel | Panel.Panel;
+  headerButtons?: FooterHeader.DialogHeaderButton[];
   buttons: FooterButton.DialogFooterButton[];
   initialData: T;
   onAction: DialogActionHandler<T>;
@@ -85,6 +88,7 @@ export interface Dialog<T extends DialogData> {
 
 export const dialogButtonFields = FooterButton.dialogFooterButtonFields;
 export const dialogButtonSchema = FooterButton.dialogFooterButtonSchema;
+export const dialogHeaderButtonSchema = FooterHeader.dialogHeaderButtonSchema;
 
 export const dialogSchema = StructureSchema.objOf([
   FieldSchema.requiredString('title'),
@@ -94,6 +98,7 @@ export const dialogSchema = StructureSchema.objOf([
   })),
   FieldSchema.defaultedString('size', 'normal'),
   FieldSchema.requiredArrayOf('buttons', dialogButtonSchema),
+  FieldSchema.defaultedArrayOf('headerButtons', [], dialogHeaderButtonSchema),
   FieldSchema.defaulted('initialData', {}),
   FieldSchema.defaultedFunction('onAction', Fun.noop),
   FieldSchema.defaultedFunction('onChange', Fun.noop),

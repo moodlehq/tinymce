@@ -1,12 +1,13 @@
 import {
   AlloySpec, AlloyTriggers, Behaviour, Button, Container, DomFactory, Dragging, GuiFactory, ModalDialog, Reflecting, SketchSpec
 } from '@ephox/alloy';
-import { Optional } from '@ephox/katamari';
+import { Dialog } from '@ephox/bridge';
+import { Arr, Optional } from '@ephox/katamari';
 import { SelectorFind } from '@ephox/sugar';
 
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import { UiFactoryBackstage, UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import { renderHeaderButton } from '../general/Button';
 import { formCancelEvent } from '../general/FormEvents';
-import { modalFullscreenEvent } from '../general/ModalEvents';
 import * as Icons from '../icons/Icons';
 import { titleChannel } from './DialogChannels';
 
@@ -15,6 +16,7 @@ import { titleChannel } from './DialogChannels';
 export interface WindowHeaderSpec {
   title: string;
   draggable: boolean;
+  headerButtons?: Dialog.DialogHeaderButton[];
 }
 
 const renderClose = (providersBackstage: UiFactoryBackstageProviders) => Button.sketch({
@@ -32,24 +34,6 @@ const renderClose = (providersBackstage: UiFactoryBackstageProviders) => Button.
   ],
   action: (comp) => {
     AlloyTriggers.emit(comp, formCancelEvent);
-  }
-});
-
-const renderFullscreen = (providersBackstage: UiFactoryBackstageProviders) => Button.sketch({
-  dom: {
-    tag: 'button',
-    classes: [ 'tox-button', 'tox-button--icon', 'tox-button--naked' ],
-    attributes: {
-      'type': 'button',
-      'aria-label': providersBackstage.translate('Fullscreen'),
-      'title': providersBackstage.translate('Fullscreen') // TODO tooltips: AP-213
-    }
-  },
-  components: [
-    Icons.render('fullscreen', { tag: 'div', classes: [ 'tox-icon' ] }, providersBackstage.icons)
-  ],
-  action: (comp) => {
-    AlloyTriggers.emit(comp, modalFullscreenEvent);
   }
 });
 
@@ -93,7 +77,6 @@ const renderInlineHeader = (
   dom: DomFactory.fromHtml('<div class="tox-dialog__header"></div>'),
   components: [
     renderTitle(spec, dialogId, Optional.some(titleId), providersBackstage),
-    renderFullscreen(providersBackstage),
     renderDragHandle(),
     renderClose(providersBackstage)
   ],
@@ -113,13 +96,12 @@ const renderInlineHeader = (
   ])
 });
 
-const renderModalHeader = (spec: WindowHeaderSpec, dialogId: string, providersBackstage: UiFactoryBackstageProviders): AlloySpec => {
+const makeButton = (button: Dialog.DialogHeaderButton, backstage: UiFactoryBackstage) => renderHeaderButton(button, button.type, backstage);
+
+const renderModalHeader = (spec: WindowHeaderSpec, dialogId: string, backstage: UiFactoryBackstage): AlloySpec => {
+  const providersBackstage = backstage.shared.providers;
   const pTitle = ModalDialog.parts.title(
     renderTitle(spec, dialogId, Optional.none(), providersBackstage)
-  );
-
-  const pFullscreen = ModalDialog.parts.fullscreen(
-    renderFullscreen(providersBackstage)
   );
 
   const pHandle = ModalDialog.parts.draghandle(
@@ -130,10 +112,19 @@ const renderModalHeader = (spec: WindowHeaderSpec, dialogId: string, providersBa
     renderClose(providersBackstage)
   );
 
-  const components = [ pTitle, pFullscreen ].concat(spec.draggable ? [ pHandle ] : []).concat([ pClose ]);
+  const headerButtons = spec.headerButtons ?? [];
+
+  const renderedButtons = [ ...Arr.map(headerButtons, (headerButton) => {
+    return makeButton(headerButton, backstage);
+  }), pClose ];
+
+  const defaultComponents = [ pTitle ]
+    .concat(spec.draggable ? [ pHandle ] : [])
+    .concat([ pClose ]);
+
   return Container.sketch({
     dom: DomFactory.fromHtml('<div class="tox-dialog__header"></div>'),
-    components
+    components: headerButtons.length > 0 ? renderedButtons : defaultComponents
   });
 };
 
