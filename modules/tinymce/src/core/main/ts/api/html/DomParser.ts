@@ -63,6 +63,7 @@ export interface DomParserSettings {
   preserve_cdata?: boolean;
   remove_trailing_brs?: boolean;
   root_name?: string;
+  sanitize?: boolean;
   validate?: boolean;
   inline_styles?: boolean;
   blob_cache?: BlobCache;
@@ -405,6 +406,7 @@ const DomParser = (settings: DomParserSettings = {}, schema = Schema()): DomPars
   const defaultedSettings = {
     validate: true,
     root_name: 'body',
+    sanitize: true,
     ...settings
   };
 
@@ -422,8 +424,10 @@ const DomParser = (settings: DomParserSettings = {}, schema = Schema()): DomPars
     const body = parser.parseFromString(wrappedHtml, mimeType).body;
 
     // Sanitize the content
-    purify.sanitize(body, getPurifyConfig(defaultedSettings, mimeType));
-    purify.removed = [];
+    if (defaultedSettings.sanitize) {
+      purify.sanitize(body, getPurifyConfig(defaultedSettings, mimeType));
+      purify.removed = [];
+    }
 
     return isSpecialRoot ? body.firstChild as Element : body;
   };
