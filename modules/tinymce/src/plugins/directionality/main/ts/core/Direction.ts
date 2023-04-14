@@ -26,9 +26,10 @@ const setDir = (editor: Editor, dir: Dir): void => {
       const normalizedBlockParent = getParentElement(normalizedBlock);
       normalizedBlockParent.each((parent) => {
         const parentDirection = Direction.getDirection(parent);
-        if (parentDirection !== dir) {
+        const currentDirection = Attribute.get(normalizedBlock, 'dir');
+        if (currentDirection !== dir || parentDirection !== dir) {
           Attribute.set(normalizedBlock, 'dir', dir);
-        } else if (Direction.getDirection(normalizedBlock) !== dir) {
+        } else if (parentDirection === currentDirection && currentDirection === dir) {
           Attribute.remove(normalizedBlock, 'dir');
         }
 
