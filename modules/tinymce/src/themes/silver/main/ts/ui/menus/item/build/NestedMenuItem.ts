@@ -17,10 +17,14 @@ const renderNestedItem = (spec: Menu.NestedMenuItem, itemResponse: ItemResponse,
     isEnabled: () => !Disabling.isDisabled(component),
     setEnabled: (state: boolean) => Disabling.set(component, !state),
     setIconFill: (id, value) => {
-      SelectorFind.descendant(component.element, `svg path[id="${id}"], rect[id="${id}"]`).each((underlinePath) => {
+      SelectorFind.descendant(component.element, `svg path[class="${id}"], rect[class="${id}"]`).each((underlinePath) => {
         Attribute.set(underlinePath, 'fill', value);
       });
     },
+    setTooltip: (tooltip: string) => {
+      const translatedTooltip = providersBackstage.translate(tooltip);
+      Attribute.set(component.element, 'aria-label', translatedTooltip);
+    }
   });
 
   const structure = renderItemStructure({
@@ -40,7 +44,7 @@ const renderNestedItem = (spec: Menu.NestedMenuItem, itemResponse: ItemResponse,
     onAction: Fun.noop,
     onSetup: spec.onSetup,
     triggersSubmenu: true,
-    itemBehaviours: [ ]
+    itemBehaviours: []
   }, structure, itemResponse, providersBackstage);
 };
 

@@ -84,28 +84,31 @@ const setupEvents = (editor: Editor, uiRefs: ReadyUiReferences) => {
   });
 };
 
-// TINY-9226: When introducing two sinks, the dialog mothership should be attached to the ui
-// root, and the popup mothership should be attached *after* (or before) the main mothership
-const attachUiMotherships = (uiRoot: SugarElement<HTMLElement | ShadowRoot>, uiRefs: ReadyUiReferences) => {
-  // We only have one sink currently, until TINY-9226 is completed.
-  // Add the dialog sink to the ui root
+// TINY-9226: When set, the `ui_mode: split` option will create two different sinks (one for popups and one for sinks)
+// and the popup sink will be placed adjacent to the editor. This will make it having the same scrolling ancestry.
+const attachUiMotherships = (editor: Editor, uiRoot: SugarElement<HTMLElement | ShadowRoot>, uiRefs: ReadyUiReferences) => {
+  if (Options.isSplitUiMode(editor)) {
+    Attachment.attachSystemAfter(uiRefs.mainUi.mothership.element, uiRefs.popupUi.mothership);
+  }
+  // In UiRefs, dialogUi and popupUi refer to the same thing if ui_mode: combined
   Attachment.attachSystem(uiRoot, uiRefs.dialogUi.mothership);
 };
 
-const render = async (editor: Editor, uiRefs: ReadyUiReferences, rawUiConfig: RenderUiConfig, backstage: UiFactoryBackstage, args: RenderArgs): Promise<ModeRenderInfo> => {
+const render = (editor: Editor, uiRefs: ReadyUiReferences, rawUiConfig: RenderUiConfig, backstage: UiFactoryBackstage, args: RenderArgs): ModeRenderInfo => {
   const { mainUi, uiMotherships } = uiRefs;
   const lastToolbarWidth = Cell(0);
   const outerContainer = mainUi.outerContainer;
 
-  await loadIframeSkin(editor);
+  loadIframeSkin(editor);
 
   const eTargetNode = SugarElement.fromDom(args.targetNode);
   const uiRoot = SugarShadowDom.getContentContainer(SugarShadowDom.getRootNode(eTargetNode));
 
   Attachment.attachSystemAfter(eTargetNode, mainUi.mothership);
-  attachUiMotherships(uiRoot, uiRefs);
+  attachUiMotherships(editor, uiRoot, uiRefs);
 
-  editor.on('PostRender', () => {
+  // TINY-10343: Using `SkinLoaded` instead of `PostRender` because if the skin loading takes too long you run in to rendering problems since things are measured before the CSS is being applied
+  editor.on('SkinLoaded', () => {
     // Set the sidebar before the toolbar and menubar
     // - each sidebar has an associated toggle toolbar button that needs to check the
     //   sidebar that is set to determine its active state on setup
@@ -148,7 +151,7 @@ const render = async (editor: Editor, uiRefs: ReadyUiReferences, rawUiConfig: Re
 
   editor.addCommand('ToggleSidebar', (_ui: boolean, value: string) => {
     OuterContainer.toggleSidebar(outerContainer, value);
-    editor.dispatch('ToggleSidebar');
+    Events.fireToggleSidebar(editor);
   });
 
   editor.addQueryValueHandler('ToggleSidebar', () => OuterContainer.whichSidebar(outerContainer) ?? '');
@@ -165,7 +168,10 @@ const render = async (editor: Editor, uiRefs: ReadyUiReferences, rawUiConfig: Re
       if (Type.isNull(OuterContainer.whichView(outerContainer))) {
         editor.focus();
         editor.nodeChanged();
+        OuterContainer.refreshToolbar(outerContainer);
       }
+
+      Events.fireToggleView(editor);
     }
   });
   editor.addQueryValueHandler('ToggleView', () => OuterContainer.whichView(outerContainer) ?? '');

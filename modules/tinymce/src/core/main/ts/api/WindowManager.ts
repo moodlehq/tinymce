@@ -18,10 +18,10 @@ import { Dialog } from './ui/Ui';
  *   height: 240
  * });
  *
- * // Displays an alert box using the active editors window manager instance
+ * // Displays an alert box using the active editor’s window manager instance
  * tinymce.activeEditor.windowManager.alert('Hello world!');
  *
- * // Displays a confirm box and an alert message will be displayed depending on what you choose in the confirm
+ * // Displays a confirm box. An alert message will display depending on what is chosen in the confirm box.
  * tinymce.activeEditor.windowManager.confirm('Do you want to do something?', (state) => {
  *   const message = state ? 'Ok' : 'Cancel';
  *   tinymce.activeEditor.windowManager.alert(message);
@@ -29,8 +29,9 @@ import { Dialog } from './ui/Ui';
  */
 
 export interface WindowParams {
-  readonly inline?: 'cursor' | 'toolbar';
+  readonly inline?: 'cursor' | 'toolbar' | 'bottom';
   readonly ariaAttrs?: boolean;
+  readonly persistent?: boolean;
 }
 
 interface WindowManager {
@@ -143,7 +144,9 @@ const WindowManager = (editor: Editor): WindowManager => {
      * Opens a new window.
      *
      * @method open
-     * @param {Object} args For a list of options, see: <a href="https://www.tiny.cloud/docs/tinymce/6/dialog-configuration/#configurationoptions">Dialog - Configuration options</a>.
+     * @param {Object} config For information on the available options, see: <a href="https://www.tiny.cloud/docs/tinymce/7/dialog-configuration/#options">Dialog - Configuration options</a>.
+     * @param {Object} params (Optional) For information on the available options, see: <a href="https://www.tiny.cloud/docs/tinymce/7/dialog-configuration/#configuration-parameters">Dialog - Configuration parameters</a>.
+     * @returns {WindowManager.DialogInstanceApi} A new dialog instance.
      */
     open,
 
@@ -151,13 +154,14 @@ const WindowManager = (editor: Editor): WindowManager => {
      * Opens a new window for the specified url.
      *
      * @method openUrl
-     * @param {Object} args For a list of options, see: <a href="https://www.tiny.cloud/docs/tinymce/6/urldialog/#configuration">URL dialog configuration</a>.
+     * @param {Object} config For information on the available options, see: <a href="https://www.tiny.cloud/docs/tinymce/7/urldialog/#configuration">URL dialog - Configuration</a>.
+     * @returns {WindowManager.UrlDialogInstanceApi} A new URL dialog instance.
      */
     openUrl,
 
     /**
-     * Creates an alert dialog. Please don't use the blocking behavior of this
-     * native version use the callback method instead then it can be extended.
+     * Creates an alert dialog. Do not use the blocking behavior of this
+     * native version. Use the callback method instead; then it can be extended.
      *
      * @method alert
      * @param {String} message Text to display in the new alert dialog.
@@ -170,8 +174,8 @@ const WindowManager = (editor: Editor): WindowManager => {
     alert,
 
     /**
-     * Creates a confirm dialog. Please don't use the blocking behavior of this
-     * native version use the callback method instead then it can be extended.
+     * Creates an alert dialog. Do not use the blocking behavior of this
+     * native version. Use the callback method instead; then it can be extended.
      *
      * @method confirm
      * @param {String} message Text to display in the new confirm dialog.

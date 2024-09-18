@@ -1,5 +1,6 @@
 import { FocusTools, Keys, Mouse } from '@ephox/agar';
 import { before, describe, it } from '@ephox/bedrock-client';
+import { Obj } from '@ephox/katamari';
 import { SugarBody, SugarDocument } from '@ephox/sugar';
 import { TinyHooks, TinyUiActions } from '@ephox/wrap-mcagar';
 
@@ -28,9 +29,11 @@ describe('browser.tinymce.plugins.help.DialogKeyboardNavTest', () => {
 
   const selectTab = (selector: string) => Mouse.trueClickOn(SugarBody.body(), selector);
 
-  before(() => {
+  before(async () => {
     // Open the help dialog
-    hook.editor().execCommand('mceHelp');
+    const editor = hook.editor();
+    editor.execCommand('mceHelp');
+    await TinyUiActions.pWaitForDialog(editor);
   });
 
   it('TBA: test the tab key navigation cycles through all focusable fields in Handy Shortcuts tab', async () => {
@@ -42,7 +45,7 @@ describe('browser.tinymce.plugins.help.DialogKeyboardNavTest', () => {
     pressTabKey(editor);
     await pAssertFocusOnItem('Close Button', '.tox-button:contains("Close")');
     pressTabKey(editor);
-    await pAssertFocusOnItem('"x" Close Button', '.tox-button[title="Close"]');
+    await pAssertFocusOnItem('"x" Close Button', '.tox-button[data-mce-name="close"]');
     pressTabKey(editor);
     await pAssertFocusOnItem('Handy Shortcuts Tab', '.tox-dialog__body-nav-item:contains("Handy Shortcuts")');
     pressDownArrowKey(editor);
@@ -57,7 +60,7 @@ describe('browser.tinymce.plugins.help.DialogKeyboardNavTest', () => {
     pressTabKey(editor);
     await pAssertFocusOnItem('Close Button', '.tox-button:contains("Close")');
     pressTabKey(editor);
-    await pAssertFocusOnItem('"x" Close Button', '.tox-button[title="Close"]');
+    await pAssertFocusOnItem('"x" Close Button', '.tox-button[data-mce-name="close"]');
     pressTabKey(editor);
     await pAssertFocusOnItem('Keyboard Nav Tab', '.tox-dialog__body-nav-item:contains("Keyboard Navigation")');
     pressDownArrowKey(editor);
@@ -70,9 +73,16 @@ describe('browser.tinymce.plugins.help.DialogKeyboardNavTest', () => {
     pressTabKey(editor);
     await pAssertFocusOnItem('Installed Plugins', 'div[role="document"]');
     pressTabKey(editor);
+    const installedPlugins = Obj.mapToArray(editor.plugins, (v, k) => k);
+    for (const installedPlugin of installedPlugins) {
+      await pAssertFocusOnItem(`Installed Plugins link:${installedPlugin}`, `a[href*="${installedPlugin}"]`);
+      pressTabKey(editor);
+    }
+    await pAssertFocusOnItem('Premium Plugins link:Learn more...', `a[href*="/pricing"]`);
+    pressTabKey(editor);
     await pAssertFocusOnItem('Close Button', '.tox-button:contains("Close")');
     pressTabKey(editor);
-    await pAssertFocusOnItem('"x" Close Button', '.tox-button[title="Close"]');
+    await pAssertFocusOnItem('"x" Close Button', '.tox-button[data-mce-name="close"]');
     pressTabKey(editor);
     await pAssertFocusOnItem('Plugins Tab', '.tox-dialog__body-nav-item:contains("Plugins")');
     pressDownArrowKey(editor);
@@ -85,9 +95,11 @@ describe('browser.tinymce.plugins.help.DialogKeyboardNavTest', () => {
     pressTabKey(editor);
     await pAssertFocusOnItem('TinyMCE Version', 'div[role="document"]');
     pressTabKey(editor);
+    await pAssertFocusOnItem('Installed Plugins', `a[href*="tinymce"]`);
+    pressTabKey(editor);
     await pAssertFocusOnItem('Close Button', '.tox-button:contains("Close")');
     pressTabKey(editor);
-    await pAssertFocusOnItem('"x" Close Button', '.tox-button[title="Close"]');
+    await pAssertFocusOnItem('"x" Close Button', '.tox-button[data-mce-name="close"]');
     pressTabKey(editor);
     await pAssertFocusOnItem('Version Tab', '.tox-dialog__body-nav-item:contains("Version")');
   });

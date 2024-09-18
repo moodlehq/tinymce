@@ -11,7 +11,7 @@ import { interpretInForm } from 'tinymce/themes/silver/ui/general/UiFactory';
 
 import { UiFactoryBackstage } from '../../backstage/Backstage';
 import * as DialogTabHeight from '../alien/DialogTabHeight';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
 import { formTabChangeEvent } from '../general/FormEvents';
 import * as NavigableObject from '../general/NavigableObject';
 
@@ -22,7 +22,7 @@ export type TabData = Record<string, any>;
 
 type TabPanelSpec = Omit<Dialog.TabPanel, 'type'>;
 
-export const renderTabPanel = (spec: TabPanelSpec, dialogData: Dialog.DialogData, backstage: UiFactoryBackstage): SketchSpec => {
+export const renderTabPanel = (spec: TabPanelSpec, dialogData: Dialog.DialogData, backstage: UiFactoryBackstage, getCompByName: (name: string) => Optional<AlloyComponent>): SketchSpec => {
   const storedValue = Cell<TabData>({ });
 
   const updateDataWithForm = (form: AlloyComponent): void => {
@@ -58,7 +58,7 @@ export const renderTabPanel = (spec: TabPanelSpec, dialogData: Dialog.DialogData
               tag: 'div',
               classes: [ 'tox-form' ]
             },
-            components: Arr.map(tab.items, (item) => interpretInForm(parts, item, dialogData, backstage)),
+            components: Arr.map(tab.items, (item) => interpretInForm(parts, item, dialogData, backstage, getCompByName)),
             formBehaviours: Behaviour.derive([
               Keying.config({
                 mode: 'acyclic',

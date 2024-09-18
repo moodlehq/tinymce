@@ -18,7 +18,9 @@ General workflow: Parse lists to entries -> Manipulate entries -> Compose entrie
 0-------1---2--------->Depth
 */
 
-export interface Entry {
+export type Entry = EntryList | EntryComment | EntryFragment;
+
+export interface EntryList {
   depth: number;
   dirty: boolean;
   content: SugarElement<Node>[];
@@ -27,6 +29,29 @@ export interface Entry {
   listAttributes: Record<string, any>;
   itemAttributes: Record<string, any>;
 }
+
+export interface EntryFragment {
+  isFragment: true;
+  depth: number;
+  content: SugarElement<Node>[];
+  isSelected: boolean;
+  dirty: boolean;
+  parentListType: ListType;
+}
+
+export interface EntryComment {
+  depth: number;
+  content: string;
+  dirty: boolean;
+  isSelected: boolean;
+  isComment: true;
+}
+
+const isEntryList = (entry: Entry): entry is EntryList => 'listAttributes' in entry;
+
+const isEntryComment = (entry: Entry): entry is EntryComment => 'isComment' in entry;
+
+const isEntryFragment = (entry: Entry): entry is EntryFragment => 'isFragment' in entry;
 
 const isIndented = (entry: Entry): boolean => entry.depth > 0;
 
@@ -45,11 +70,15 @@ const createEntry = (li: SugarElement, depth: number, isSelected: boolean): Opti
   content: cloneItemContent(li),
   itemAttributes: Attribute.clone(li),
   listAttributes: Attribute.clone(list),
-  listType: SugarNode.name(list) as ListType
+  listType: SugarNode.name(list) as ListType,
+  isInPreviousLi: false
 }));
 
 export {
   createEntry,
+  isEntryComment,
+  isEntryFragment,
+  isEntryList,
   isIndented,
   isSelected
 };

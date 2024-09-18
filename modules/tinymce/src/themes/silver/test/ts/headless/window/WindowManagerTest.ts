@@ -211,14 +211,21 @@ describe('headless.tinymce.themes.silver.window.WindowManagerTest', () => {
           type: 'panel',
           items: []
         },
-        buttons: []
+        // TINY-9996: buttons must be non-empty array for footer to be rendered
+        buttons: [
+          {
+            type: 'cancel',
+            name: 'cancel',
+            text: 'Cancel'
+          }
+        ]
       });
 
       const structHeaderWithDrag = ApproxStructure.build((s, str, arr) => {
         return s.element('div', {
           classes: [ arr.has('tox-dialog__header') ],
           children: [
-            s.element('div', { classes: [ arr.has('tox-dialog__title') ] }),
+            s.element('h1', { classes: [ arr.has('tox-dialog__title') ] }),
             s.element('div', { classes: [ arr.has('tox-dialog__draghandle') ] }),
             s.element('button', { classes: [ arr.has('tox-button') ] })
           ]
@@ -229,7 +236,7 @@ describe('headless.tinymce.themes.silver.window.WindowManagerTest', () => {
         return s.element('div', {
           classes: [ arr.has('tox-dialog__header') ],
           children: [
-            s.element('div', { classes: [ arr.has('tox-dialog__title') ] }),
+            s.element('h1', { classes: [ arr.has('tox-dialog__title') ] }),
             s.element('button', { classes: [ arr.has('tox-button') ] })
           ]
         });

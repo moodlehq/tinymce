@@ -24,7 +24,7 @@ type UrlInputSpec = Omit<Dialog.UrlInput, 'type'>;
 
 const getItems = (fileType: 'image' | 'media' | 'file', input: AlloyComponent, urlBackstage: UiFactoryBackstageForUrlInput) => {
   const urlInputValue = Representing.getValue(input);
-  const term = urlInputValue.meta.text !== undefined ? urlInputValue.meta.text : urlInputValue.value;
+  const term = urlInputValue?.meta?.text ?? urlInputValue.value;
   const info = urlBackstage.getLinkInformation();
   return info.fold(
     () => [],
@@ -236,7 +236,7 @@ export const renderUrlInput = (
   const memUrlPickerButton = Memento.record(renderButton({
     name: spec.name,
     icon: Optional.some('browse'),
-    text: spec.label.getOr(''),
+    text: spec.picker_text.or(spec.label).getOr(''),
     enabled: spec.enabled,
     primary: false,
     buttonType: Optional.none(),

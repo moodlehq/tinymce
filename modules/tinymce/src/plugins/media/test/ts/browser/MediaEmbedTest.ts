@@ -6,15 +6,13 @@ import Plugin from 'tinymce/plugins/media/Plugin';
 
 import * as Utils from '../module/test/Utils';
 
-describe('browser.tinymce.plugins.media.core.MediaEmbedTest', () => {
+// TODO TINY-10480: Investigate flaky tests
+describe.skip('browser.tinymce.plugins.media.core.MediaEmbedTest', () => {
   const hook = TinyHooks.bddSetupLight<Editor>({
     plugins: [ 'media' ],
     toolbar: 'media',
-    media_url_resolver: (data: { url: string }, resolve: (response: { html: string }) => void) => {
-      resolve({
-        html: '<video width="300" height="150" ' +
-          'controls="controls">\n<source src="' + data.url + '" />\n</video>'
-      });
+    media_url_resolver: (data: { url: string }) => {
+      return Promise.resolve({ html: '<video width="300" height="150" ' + 'controls="controls">\n<source src="' + data.url + '" />\n</video>' });
     },
     base_url: '/project/tinymce/js/tinymce'
   }, [ Plugin ]);

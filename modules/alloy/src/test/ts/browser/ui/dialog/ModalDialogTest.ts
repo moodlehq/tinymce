@@ -1,7 +1,8 @@
 import { ApproxStructure, Assertions, FocusTools, Keyboard, Keys, Mouse, StructAssert, TestStore, UiFinder } from '@ephox/agar';
 import { after, afterEach, before, beforeEach, describe, it } from '@ephox/bedrock-client';
-import { Result } from '@ephox/katamari';
-import { Attribute, Class, Compare, SugarBody, SugarDocument } from '@ephox/sugar';
+import { Result, Type } from '@ephox/katamari';
+import { PlatformDetection } from '@ephox/sand';
+import { Attribute, Class, Compare, SugarBody, SugarDocument, TextContent } from '@ephox/sugar';
 
 import * as AddEventsBehaviour from 'ephox/alloy/api/behaviour/AddEventsBehaviour';
 import * as Behaviour from 'ephox/alloy/api/behaviour/Behaviour';
@@ -254,27 +255,27 @@ describe('browser.alloy.ui.dialog.ModalDialogTest', () => {
     const footer = ModalDialog.getFooter(dialog);
     Assertions.assertStructure('Checking footer of dialog', ApproxStructure.build((s, _str, arr) => s.element('div', {
       classes: [ arr.has('test-dialog-footer') ]
-    })), footer.element);
+    })), footer.getOrDie().element);
   });
 
   it('TINY-9520: Checking aria attribute of dialog', () => {
+    const os = PlatformDetection.detect().os;
     const dialog = hook.component();
     const dialogTitle = UiFinder.findIn(dialog.element, dialogSelectors.title).getOrDie();
-    const dialogBody = UiFinder.findIn(dialog.element, dialogSelectors.body).getOrDie();
 
-    const titleId = Attribute.getOpt(dialogTitle, 'id').getOr('');
+    if (os.isMacOS()) {
+      const ariaLabel = TextContent.get(dialogTitle);
+      Assertions.assertEq('Dialog aria-labelledby should not be set for MacOS', true, !Attribute.has(dialog.element, 'aria-labelledby'));
+      Assertions.assertEq('aria-label should not be empty', true, Type.isNonNullable(ariaLabel) && ariaLabel.length > 0);
+      Assertions.assertEq('Dialog aria-label should be the same as header title', Attribute.get(dialog.element, 'aria-label'), ariaLabel);
+    } else {
+      const titleId = Attribute.getOpt(dialogTitle, 'id').getOr('');
+      Assertions.assertEq('titleId should be set', true, Attribute.has(dialogTitle, 'id'));
+      Assertions.assertEq('titleId should not be empty', true, titleId.length > 0);
 
-    Assertions.assertEq('titleId should be set', true, Attribute.has(dialogTitle, 'id'));
-    Assertions.assertEq('titleId should not be empty', true, titleId.length > 0);
-
-    const dialogLabelledBy = Attribute.get(dialog.element, 'aria-labelledby');
-    Assertions.assertEq('Labelledby blah better error message', titleId, dialogLabelledBy);
-
-    const describeId = Attribute.getOpt(dialogBody, 'id').getOr('');
-    Assertions.assertEq('describeId should be set', true, Attribute.has(dialogBody, 'id'));
-    Assertions.assertEq('describeId should not be empty', true, describeId.length > 0);
-    const dialogDescribedBy = Attribute.get(dialog.element, 'aria-describedby');
-    Assertions.assertEq('aria-describedby should be set to describeId', describeId, dialogDescribedBy);
+      const dialogLabelledBy = Attribute.get(dialog.element, 'aria-labelledby');
+      Assertions.assertEq('Dialog aria-labelledby should be equal to title id', titleId, dialogLabelledBy);
+    }
   });
 
   it('TINY-9520: Focus testing', async () => {
@@ -305,6 +306,28 @@ describe('browser.alloy.ui.dialog.ModalDialogTest', () => {
 
     Mouse.clickOn(doc, '.test-dialog-blocker');
     await FocusTools.pTryOnSelector('Focus should move to first focusable element when clicking the blocker', doc, dialogSelectors.body);
+  });
+
+  it('TINY-10056: Clicking on blocker shouldn\'t focus first focusable when dialog is blocked', async () => {
+    const dialog = hook.component();
+    const doc = SugarDocument.getDocument();
+
+    ModalDialog.setBusy(dialog, (_d, bs) => ({
+      dom: {
+        tag: 'div',
+        classes: [ 'test-busy-class' ],
+        innerHtml: 'Loading',
+      },
+      behaviours: bs
+    }));
+
+    Mouse.clickOn(doc, '.test-dialog-blocker');
+    await FocusTools.pTryOnSelector('Focus should move to blocker element when clicking the blocker', doc, '.test-busy-class');
+
+    Mouse.clickOn(doc, '.test-dialog');
+    await FocusTools.pTryOnSelector('Focus should move to blocker element when clicking the blocker', doc, '.test-busy-class');
+
+    ModalDialog.setIdle(dialog);
   });
 
   it('TINY-9520: Dialog busy test', async () => {

@@ -34,7 +34,7 @@ const canFormatBR = (editor: Editor, format: ApplyFormat, node: HTMLBRElement, p
     const validBRParentElements = getTextRootBlockElements(editor.schema);
     // If a caret node is present, the format should apply to that, not the br (applicable to collapsed selections)
     const hasCaretNodeSibling = PredicateExists.sibling(SugarElement.fromDom(node), (sibling) => isCaretNode(sibling.dom));
-    return Obj.hasNonNullableKey(validBRParentElements, parentName) && Empty.isEmpty(SugarElement.fromDom(node.parentNode), false) && !hasCaretNodeSibling;
+    return Obj.hasNonNullableKey(validBRParentElements, parentName) && Empty.isEmptyNode(editor.schema, node.parentNode, { skipBogus: false, includeZwsp: true }) && !hasCaretNodeSibling;
   } else {
     return false;
   }
@@ -56,7 +56,7 @@ const applyStyles = (dom: DOMUtils, elm: Element, format: ApplyFormat, vars: For
   }
 };
 
-const applyFormat = (ed: Editor, name: string, vars?: FormatVars, node?: Node | RangeLikeObject | null): void => {
+const applyFormatAction = (ed: Editor, name: string, vars?: FormatVars, node?: Node | RangeLikeObject | null): void => {
   const formatList = ed.formatter.get(name) as ApplyFormat[];
   const format = formatList[0];
   const isCollapsed = !node && ed.selection.isCollapsed();
@@ -370,6 +370,12 @@ const applyFormat = (ed: Editor, name: string, vars?: FormatVars, node?: Node | 
   }
 
   Events.fireFormatApply(ed, name, node, vars);
+};
+
+const applyFormat = (editor: Editor, name: string, vars?: FormatVars, node?: Node | RangeLikeObject | null): void => {
+  if (node || editor.selection.isEditable()) {
+    applyFormatAction(editor, name, vars, node);
+  }
 };
 
 export {

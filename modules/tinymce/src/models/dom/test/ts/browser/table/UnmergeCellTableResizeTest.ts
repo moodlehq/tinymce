@@ -243,12 +243,13 @@ describe('browser.tinymce.models.dom.table.UnmergeCellTableResizeTest', () => {
   };
 
   const pUnmergeCellsMeasureTableWidth = async (editor: Editor, scenario: Scenario) => {
+    editor.focus();
     const table = insertTable(editor, scenario.html);
     await TableTestUtils.pDragHandle(editor, 'se', -100, 0);
-    const widthBefore = TableTestUtils.getWidths(editor, table.dom);
+    const widthBefore = TableTestUtils.getWidthData(editor, table.dom);
     TableTestUtils.mergeCells(editor, scenario.select);
     TableTestUtils.splitCells(editor);
-    const widthAfter = TableTestUtils.getWidths(editor, table.dom);
+    const widthAfter = TableTestUtils.getWidthData(editor, table.dom);
     return {
       widthBefore,
       widthAfter
@@ -260,9 +261,9 @@ describe('browser.tinymce.models.dom.table.UnmergeCellTableResizeTest', () => {
     await TableTestUtils.pDragHandle(editor, 'se', -100, 0);
     TableTestUtils.mergeCells(editor, scenario.select);
     await TableTestUtils.pDragHandle(editor, 'se', -100, 0);
-    const widthBefore = TableTestUtils.getWidths(editor, table.dom);
+    const widthBefore = TableTestUtils.getWidthData(editor, table.dom);
     TableTestUtils.splitCells(editor);
-    const widthAfter = TableTestUtils.getWidths(editor, table.dom);
+    const widthAfter = TableTestUtils.getWidthData(editor, table.dom);
     return {
       widthBefore,
       widthAfter

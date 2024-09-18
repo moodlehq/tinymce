@@ -99,6 +99,11 @@ describe('browser.tinymce.core.EditorTest', () => {
 
     editor.setContent('<p><a href="//www.somesite.com/test/file.htm">test</a></p>');
     assert.equal(editor.getContent(), '<p><a href="//www.somesite.com/test/file.htm">test</a></p>', 'urls - relativeURLs');
+
+    const nonHttpLink = 'onenote:///D:\Anote\New%20Section%201.one';
+
+    editor.setContent(`<p><a href="${nonHttpLink}">test</a></p>`);
+    assert.equal(editor.getContent(), `<p><a href="${nonHttpLink}">test</a></p>`, 'urls - relativeURLs: TINY-10153');
   });
 
   it('TBA: urls - absoluteURLs', () => {
@@ -118,6 +123,11 @@ describe('browser.tinymce.core.EditorTest', () => {
 
     editor.setContent('<p><a href="http://www.somesite.com/test/file.htm">test</a></p>');
     assert.equal(editor.getContent(), '<p><a href="http://www.somesite.com/test/file.htm">test</a></p>', 'urls - absoluteURLs');
+
+    const nonHttpLink = 'onenote:///D:\Anote\New%20Section%201.one';
+
+    editor.setContent(`<p><a href="${nonHttpLink}">test</a></p>`);
+    assert.equal(editor.getContent(), `<p><a href="${nonHttpLink}">test</a></p>`, 'urls - absoluteURLs: TINY-10153');
 
     editor.options.set('relative_urls', false);
     editor.options.set('remove_script_host', false);
@@ -139,6 +149,9 @@ describe('browser.tinymce.core.EditorTest', () => {
 
     editor.setContent('<p><a href="//www.somesite.com/test/file.htm">test</a></p>');
     assert.equal(editor.getContent(), '<p><a href="//www.somesite.com/test/file.htm">test</a></p>', 'urls - absoluteURLs');
+
+    editor.setContent(`<p><a href="${nonHttpLink}">test</a></p>`);
+    assert.equal(editor.getContent(), `<p><a href="${nonHttpLink}">test</a></p>`, 'urls - absoluteURLs: TINY-10153');
   });
 
   it('TBA: WebKit Serialization range bug', function () {
@@ -388,7 +401,8 @@ describe('browser.tinymce.core.EditorTest', () => {
     assert.isFalse(editor.isDirty(), 'setDirty/isDirty');
 
     editor.setDirty(true);
-    assert.equal(lastArgs?.type, 'dirty', 'setDirty/isDirty');
+    // Use type assertion to satisfy TypeScript and handle potential undefined lastArgs
+    assert.equal(lastArgs ? (lastArgs as EditorEvent<{}>).type : undefined, 'dirty', 'setDirty/isDirty');
     assert.isTrue( editor.isDirty(), 'setDirty/isDirty');
 
     lastArgs = undefined;
@@ -487,6 +501,16 @@ describe('browser.tinymce.core.EditorTest', () => {
     const editor = hook.editor();
     editor.setContent('<img src="data:image/gif;base64,R0ÖlGODdhIAAgAIABAP8AAP///ywAAAAAIAAgAAACHoSPqcvtD6OctNqLs968+w+G4kiW5omm6sq27gubBQA7AA==%A0">');
     TinyAssertions.assertContent(editor, '<p><img src="data:image/gif;base64,R0"></p>');
+  });
+
+  it('TINY-10955: multiple comments will not cause unexpected newlines', () => {
+    const editor = hook.editor();
+    editor.setContent('<div>A</div><!--Comment1--><!--Comment2--><div>B</div>');
+    TinyAssertions.assertRawContent(editor, '<div>A</div><!--Comment1--><!--Comment2--><div>B</div>');
+    editor.setContent('<div>A</div> <!--Comment1--> <!--Comment2--> <div>B</div>');
+    TinyAssertions.assertRawContent(editor, '<div>A</div><!--Comment1--><!--Comment2--><div>B</div>');
+    editor.setContent('<div>A</div>\n<!--Comment1-->\n<!--Comment2-->\n<div>B</div>');
+    TinyAssertions.assertRawContent(editor, '<div>A</div><!--Comment1--><!--Comment2--><div>B</div>');
   });
 
   context('hasPlugin', () => {

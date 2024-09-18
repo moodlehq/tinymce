@@ -1,4 +1,6 @@
-import { Arr, Singleton, Throttler, Type } from '@ephox/katamari';
+import { DataTransfer, DataTransferContent } from '@ephox/dragster';
+import { Arr, Optional, Singleton, Throttler, Type } from '@ephox/katamari';
+import { SugarElement } from '@ephox/sugar';
 
 import DOMUtils from './api/dom/DOMUtils';
 import { EventUtilsEvent } from './api/dom/EventUtils';
@@ -11,7 +13,9 @@ import VK from './api/util/VK';
 import * as ClosestCaretCandidate from './caret/ClosestCaretCandidate';
 import * as MousePosition from './dom/MousePosition';
 import * as NodeType from './dom/NodeType';
+import * as PaddingBr from './dom/PaddingBr';
 import * as ErrorReporter from './ErrorReporter';
+import * as DragEvents from './events/DragEvents';
 import { isUIElement } from './focus/FocusController';
 import * as Predicate from './util/Predicate';
 
@@ -30,6 +34,7 @@ const mouseRangeToTriggerScrollOutsideEditor = 16;
 
 interface State {
   element: HTMLElement;
+  dataTransfer: DataTransfer;
   dragging: boolean;
   screenX: number;
   screenY: number;
@@ -57,12 +62,6 @@ const isValidDropTarget = (editor: Editor, targetElement: Node | null, dragEleme
   } else {
     return editor.dom.isEditable(targetElement);
   }
-};
-
-const cloneElement = (elm: HTMLElement) => {
-  const cloneElm = elm.cloneNode(true) as HTMLElement;
-  cloneElm.removeAttribute('data-mce-selected');
-  return cloneElm;
 };
 
 const createGhost = (editor: Editor, elm: HTMLElement, width: number, height: number) => {
@@ -213,6 +212,15 @@ const removeElement = (elm: HTMLElement) => {
   }
 };
 
+const removeElementWithPadding = (dom: DOMUtils, elm: HTMLElement) => {
+  const parentBlock = dom.getParent(elm.parentNode, dom.isBlock);
+
+  removeElement(elm);
+  if (parentBlock && parentBlock !== dom.getRoot() && dom.isEmpty(parentBlock)) {
+    PaddingBr.fillWithPaddingBr(SugarElement.fromDom(parentBlock));
+  }
+};
+
 const isLeftMouseButtonPressed = (e: EditorEvent<MouseEvent>) => e.button === 0;
 
 const applyRelPos = (state: State, position: MousePosition.PagePosition) => ({
@@ -231,6 +239,7 @@ const start = (state: Singleton.Value<State>, editor: Editor) => (e: EditorEvent
 
       state.set({
         element: ceElm,
+        dataTransfer: DataTransfer.createDataTransfer(),
         dragging: false,
         screenX: e.screenX,
         screenY: e.screenY,
@@ -247,22 +256,35 @@ const start = (state: Singleton.Value<State>, editor: Editor) => (e: EditorEvent
   }
 };
 
+const placeCaretAt = (editor: Editor, clientX: number, clientY: number) => {
+  editor._selectionOverrides.hideFakeCaret();
+  ClosestCaretCandidate.closestFakeCaretCandidate(editor.getBody(), clientX, clientY).fold(
+    () => editor.selection.placeCaretAt(clientX, clientY),
+    (caretInfo) => {
+      const range = editor._selectionOverrides.showCaret(1, caretInfo.node as HTMLElement, caretInfo.position === ClosestCaretCandidate.FakeCaretPosition.Before, false);
+      if (range) {
+        editor.selection.setRng(range);
+      } else {
+        editor.selection.placeCaretAt(clientX, clientY);
+      }
+    }
+  );
+};
+
+const dispatchDragEvent = (editor: Editor, type: DragEvents.DragEventType, target: Element, dataTransfer: DataTransfer, mouseEvent?: EditorEvent<MouseEvent>): EditorEvent<DragEvent> => {
+  if (type === 'dragstart') {
+    DataTransferContent.setHtmlData(dataTransfer, editor.dom.getOuterHTML(target));
+  }
+
+  const event = DragEvents.makeDragEvent(type, target, dataTransfer, mouseEvent);
+  const args = editor.dispatch(type, event);
+
+  return args;
+};
+
 const move = (state: Singleton.Value<State>, editor: Editor) => {
   // Reduces laggy drag behavior on Gecko
-  const throttledPlaceCaretAt = Throttler.first((clientX: number, clientY: number) => {
-    editor._selectionOverrides.hideFakeCaret();
-    ClosestCaretCandidate.closestFakeCaretCandidate(editor.getBody(), clientX, clientY).fold(
-      () => editor.selection.placeCaretAt(clientX, clientY),
-      (caretInfo) => {
-        const range = editor._selectionOverrides.showCaret(1, caretInfo.node as HTMLElement, caretInfo.position === ClosestCaretCandidate.FakeCaretPosition.Before, false);
-        if (range) {
-          editor.selection.setRng(range);
-        } else {
-          editor.selection.placeCaretAt(clientX, clientY);
-        }
-      }
-    );
-  }, 0);
+  const throttledPlaceCaretAt = Throttler.first((clientX: number, clientY: number) => placeCaretAt(editor, clientX, clientY), 0);
   editor.on('remove', throttledPlaceCaretAt.cancel);
   const state_ = state;
 
@@ -270,7 +292,12 @@ const move = (state: Singleton.Value<State>, editor: Editor) => {
     const movement = Math.max(Math.abs(e.screenX - state.screenX), Math.abs(e.screenY - state.screenY));
 
     if (!state.dragging && movement > 10) {
-      const args = editor.dispatch('dragstart', { target: state.element as EventTarget } as DragEvent);
+      const args = dispatchDragEvent(editor, 'dragstart', state.element, state.dataTransfer, e);
+      // TINY-9601: dataTransfer is writable in dragstart, so keep it up-to-date
+      if (Type.isNonNullable(args.dataTransfer)) {
+        state.dataTransfer = args.dataTransfer;
+      }
+
       if (args.isDefaultPrevented()) {
         return;
       }
@@ -306,38 +333,43 @@ const drop = (state: Singleton.Value<State>, editor: Editor) => (e: EditorEvent<
     state.intervalId.clear();
     if (state.dragging) {
       if (isValidDropTarget(editor, getRawTarget(editor.selection), state.element)) {
-        const targetClone = cloneElement(state.element);
-
-        const args = editor.dispatch('drop', {
-          clientX: e.clientX,
-          clientY: e.clientY
-        } as DragEvent);
+        const dropTarget = editor.getDoc().elementFromPoint(e.clientX, e.clientY) ?? editor.getBody();
+        const args = dispatchDragEvent(editor, 'drop', dropTarget, state.dataTransfer, e);
 
         if (!args.isDefaultPrevented()) {
           editor.undoManager.transact(() => {
-            removeElement(state.element);
-            editor.insertContent(editor.dom.getOuterHTML(targetClone));
+            removeElementWithPadding(editor.dom, state.element);
+            // TINY-9601: Use dataTransfer property to determine inserted content on drop. This allows users to
+            // manipulate drop content by modifying dataTransfer in the dragstart event.
+            DataTransferContent.getHtmlData(state.dataTransfer).each((content) => editor.insertContent(content));
             editor._selectionOverrides.hideFakeCaret();
           });
         }
       }
 
-      editor.dispatch('dragend');
+      // Use body as the target since the element we are dragging no longer exists. Native drag/drop works in a similar way.
+      dispatchDragEvent(editor, 'dragend', editor.getBody(), state.dataTransfer, e);
     }
   });
 
   removeDragState(state);
 };
 
-const stop = (state: Singleton.Value<State>, editor: Editor) => () => {
+const stopDragging = (state: Singleton.Value<State>, editor: Editor, e: Optional<EditorEvent<MouseEvent>>) => {
   state.on((state) => {
     state.intervalId.clear();
     if (state.dragging) {
-      editor.dispatch('dragend');
+      e.fold(
+        () => dispatchDragEvent(editor, 'dragend', state.element, state.dataTransfer),
+        (mouseEvent) => dispatchDragEvent(editor, 'dragend', state.element, state.dataTransfer, mouseEvent)
+      );
     }
   });
   removeDragState(state);
 };
+
+const stop = (state: Singleton.Value<State>, editor: Editor) => (e: EditorEvent<MouseEvent>) =>
+  stopDragging(state, editor, Optional.some(e));
 
 const removeDragState = (state: Singleton.Value<State>) => {
   state.on((state) => {
@@ -372,7 +404,7 @@ const bindFakeDragEvents = (editor: Editor) => {
   editor.on('keydown', (e) => {
     // Fire 'dragend' when the escape key is pressed
     if (e.keyCode === VK.ESC) {
-      dragEndHandler();
+      stopDragging(state, editor, Optional.none());
     }
   });
 };

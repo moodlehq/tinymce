@@ -1,14 +1,19 @@
 import { AlloyComponent, AlloySpec, AlloyTriggers, SketchSpec } from '@ephox/alloy';
 import { Arr, Fun, Obj, Optional } from '@ephox/katamari';
+import { Dimension } from '@ephox/sugar';
 
 import Editor from 'tinymce/core/api/Editor';
+import * as Options from 'tinymce/themes/silver/api/Options';
 
+import * as Events from '../../../api/Events';
 import { UiFactoryBackstage } from '../../../backstage/Backstage';
 import { updateMenuText } from '../../dropdown/CommonDropdown';
+import { onSetupEditableToggle } from '../ControlUtils';
 import { createBespokeNumberInput } from './BespokeNumberInput';
 import { createMenuItems, createSelectButton, FormatterFormatItem, SelectedFormat, SelectSpec } from './BespokeSelect';
 import { buildBasicSettingsDataset, Delimiter } from './SelectDatasets';
 import * as FormatRegister from './utils/FormatRegister';
+import * as Tooltip from './utils/Tooltip';
 
 interface Config {
   readonly step: number;
@@ -17,8 +22,12 @@ interface Config {
 export interface NumberInputSpec {
   onAction: (format: string, focusBack?: boolean) => void;
   updateInputValue: (comp: AlloyComponent) => void;
-  getConfigFromUnit: (unit: string) => Config;
+  getNewValue: (text: string, updateFunction: (value: number, step: number) => number) => string;
 }
+
+const menuTitle = 'Font sizes';
+const getTooltipPlaceholder = Fun.constant('Font size {0}');
+const fallbackFontSize = '12pt';
 
 // See https://websemantics.uk/articles/font-size-conversion/ for conversions
 const legacyFontSizes: Record<string, string> = {
@@ -99,13 +108,14 @@ const getSpec = (editor: Editor): SelectSpec => {
     AlloyTriggers.emitWith(comp, updateMenuText, {
       text
     });
+    Events.fireFontSizeTextUpdate(editor, { value: text });
   };
 
   const dataset = buildBasicSettingsDataset(editor, 'font_size_formats', Delimiter.Space);
 
   return {
-    tooltip: 'Font sizes',
-    text: Optional.some('12pt'),
+    tooltip: Tooltip.makeTooltipText(editor, getTooltipPlaceholder(), fallbackFontSize),
+    text: Optional.some(fallbackFontSize),
     icon: Optional.none(),
     isSelectedFor,
     getPreviewFor,
@@ -119,7 +129,7 @@ const getSpec = (editor: Editor): SelectSpec => {
 };
 
 const createFontSizeButton = (editor: Editor, backstage: UiFactoryBackstage): SketchSpec =>
-  createSelectButton(editor, backstage, getSpec(editor));
+  createSelectButton(editor, backstage, getSpec(editor), getTooltipPlaceholder, 'FontSizeTextUpdate', 'fontsize');
 
 const getConfigFromUnit = (unit: string): Config => {
   const baseConfig = { step: 1 };
@@ -136,26 +146,48 @@ const getConfigFromUnit = (unit: string): Config => {
   return configs[unit] ?? baseConfig;
 };
 
+const defaultValue = 16;
+const isValidValue = (value: number): boolean => value >= 0;
+
 const getNumberInputSpec = (editor: Editor): NumberInputSpec => {
+  const getCurrentValue = () => editor.queryCommandValue('FontSize');
   const updateInputValue = (comp: AlloyComponent) => AlloyTriggers.emitWith(comp, updateMenuText, {
-    text: editor.queryCommandValue('FontSize')
+    text: getCurrentValue()
   });
 
   return {
     updateInputValue,
-    getConfigFromUnit,
-    onAction: (format, focusBack) => editor.execCommand('FontSize', false, format, { skip_focus: !focusBack })
+    onAction: (format, focusBack) => editor.execCommand('FontSize', false, format, { skip_focus: !focusBack }),
+    getNewValue: (text, updateFunction) => {
+      Dimension.parse(text, [ 'unsupportedLength', 'empty' ]);
+
+      const currentValue = getCurrentValue();
+      const parsedText = Dimension.parse(text, [ 'unsupportedLength', 'empty' ]).or(
+        Dimension.parse(currentValue, [ 'unsupportedLength', 'empty' ])
+      );
+      const value = parsedText.map((res) => res.value).getOr(defaultValue);
+      const defaultUnit = Options.getFontSizeInputDefaultUnit(editor);
+      const unit = parsedText.map((res) => res.unit).filter((u) => u !== '').getOr(defaultUnit);
+
+      const newValue = updateFunction(value, getConfigFromUnit(unit).step);
+      const res = `${isValidValue(newValue) ? newValue : value}${unit}`;
+      if (res !== currentValue) {
+        Events.fireFontSizeInputTextUpdate(editor, { value: res });
+      }
+      return res;
+    }
   };
 };
 
 const createFontSizeInputButton = (editor: Editor, backstage: UiFactoryBackstage): AlloySpec =>
-  createBespokeNumberInput(editor, backstage, getNumberInputSpec(editor));
+  createBespokeNumberInput(editor, backstage, getNumberInputSpec(editor), 'fontsizeinput');
 
 // TODO: Test this!
 const createFontSizeMenu = (editor: Editor, backstage: UiFactoryBackstage): void => {
-  const menuItems = createMenuItems(editor, backstage, getSpec(editor));
+  const menuItems = createMenuItems(backstage, getSpec(editor));
   editor.ui.registry.addNestedMenuItem('fontsize', {
-    text: 'Font sizes',
+    text: menuTitle,
+    onSetup: onSetupEditableToggle(editor),
     getSubmenuItems: () => menuItems.items.validateItems(menuItems.getStyleItems())
   });
 };

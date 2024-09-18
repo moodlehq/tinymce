@@ -1,4 +1,4 @@
-import { Dragging, Focusing, Keying, SimpleSpec, Tabstopping } from '@ephox/alloy';
+import { Dragging, Focusing, Keying, SimpleSpec, Tabstopping, Tooltipping } from '@ephox/alloy';
 import { Optional } from '@ephox/katamari';
 import { SugarPosition } from '@ephox/sugar';
 
@@ -33,11 +33,16 @@ export const renderResizeHandler = (editor: Editor, providersBackstage: UiFactor
     return Optional.none();
   }
 
+  const resizeLabel = resizeType === ResizeTypes.Both
+    ? 'Press the arrow keys to resize the editor.'
+    : 'Press the Up and Down arrow keys to resize the editor.';
+
   return Optional.some(Icons.render('resize-handle', {
     tag: 'div',
     classes: [ 'tox-statusbar__resize-handle' ],
     attributes: {
-      title: providersBackstage.translate('Resize'), // TODO: tooltips AP-213
+      'aria-label': providersBackstage.translate(resizeLabel),
+      'data-mce-name': 'resize-handle'
     },
     behaviours: [
       Dragging.config({
@@ -54,7 +59,12 @@ export const renderResizeHandler = (editor: Editor, providersBackstage: UiFactor
         onDown: () => keyboardHandler(editor, resizeType, 0, 1),
       }),
       Tabstopping.config({}),
-      Focusing.config({})
+      Focusing.config({}),
+      Tooltipping.config(
+        providersBackstage.tooltips.getConfig({
+          tooltipText: providersBackstage.translate('Resize')
+        })
+      )
     ]
   }, providersBackstage.icons));
 };

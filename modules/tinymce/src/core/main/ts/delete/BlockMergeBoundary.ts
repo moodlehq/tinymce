@@ -1,6 +1,7 @@
 import { Optional, Optionals } from '@ephox/katamari';
 import { Compare, PredicateFind, SugarElement, SugarNode } from '@ephox/sugar';
 
+import Schema from '../api/html/Schema';
 import * as CaretFinder from '../caret/CaretFinder';
 import CaretPosition from '../caret/CaretPosition';
 import * as TransparentElements from '../content/TransparentElements';
@@ -35,6 +36,9 @@ const getBlockPosition = (rootNode: HTMLElement, pos: CaretPosition): Optional<B
   return DeleteUtils.getParentBlock(rootElm, containerElm).map((block) => blockPosition(block, pos));
 };
 
+const isNotAncestorial = (blockBoundary: BlockBoundary) =>
+  !(Compare.contains(blockBoundary.to.block, blockBoundary.from.block) || Compare.contains(blockBoundary.from.block, blockBoundary.to.block));
+
 const isDifferentBlocks = (blockBoundary: BlockBoundary): boolean =>
   !Compare.eq(blockBoundary.from.block, blockBoundary.to.block);
 
@@ -53,12 +57,12 @@ const isEditable = (blockBoundary: BlockBoundary): boolean =>
   NodeType.isContentEditableFalse(blockBoundary.from.block.dom) === false && NodeType.isContentEditableFalse(blockBoundary.to.block.dom) === false;
 
 const hasValidBlocks = (blockBoundary: BlockBoundary): boolean => {
-  const isValidBlock = (block: SugarElement<Element>) => ElementType.isTextBlock(block) || TransparentElements.hasBlockAttr(block.dom);
+  const isValidBlock = (block: SugarElement<Element>) => ElementType.isTextBlock(block) || TransparentElements.hasBlockAttr(block.dom) || ElementType.isListItem(block);
   return isValidBlock(blockBoundary.from.block) && isValidBlock(blockBoundary.to.block);
 };
 
-const skipLastBr = (rootNode: HTMLElement, forward: boolean, blockPosition: BlockPosition): BlockPosition => {
-  if (NodeType.isBr(blockPosition.position.getNode()) && !Empty.isEmpty(blockPosition.block)) {
+const skipLastBr = (schema: Schema, rootNode: HTMLElement, forward: boolean, blockPosition: BlockPosition): BlockPosition => {
+  if (NodeType.isBr(blockPosition.position.getNode()) && !Empty.isEmpty(schema, blockPosition.block)) {
     return CaretFinder.positionIn(false, blockPosition.block.dom).bind((lastPositionInBlock) => {
       if (lastPositionInBlock.isEqual(blockPosition.position)) {
         return CaretFinder.fromPosition(forward, rootNode, lastPositionInBlock).bind((to) => getBlockPosition(rootNode, to));
@@ -71,20 +75,20 @@ const skipLastBr = (rootNode: HTMLElement, forward: boolean, blockPosition: Bloc
   }
 };
 
-const readFromRange = (rootNode: HTMLElement, forward: boolean, rng: Range): Optional<BlockBoundary> => {
+const readFromRange = (schema: Schema, rootNode: HTMLElement, forward: boolean, rng: Range): Optional<BlockBoundary> => {
   const fromBlockPos = getBlockPosition(rootNode, CaretPosition.fromRangeStart(rng));
   const toBlockPos = fromBlockPos.bind((blockPos) =>
     CaretFinder.fromPosition(forward, rootNode, blockPos.position).bind((to) =>
-      getBlockPosition(rootNode, to).map((blockPos) => skipLastBr(rootNode, forward, blockPos))
+      getBlockPosition(rootNode, to).map((blockPos) => skipLastBr(schema, rootNode, forward, blockPos))
     )
   );
 
   return Optionals.lift2(fromBlockPos, toBlockPos, blockBoundary).filter((blockBoundary) =>
-    isDifferentBlocks(blockBoundary) && hasSameHost(rootNode, blockBoundary) && isEditable(blockBoundary) && hasValidBlocks(blockBoundary));
+    isDifferentBlocks(blockBoundary) && hasSameHost(rootNode, blockBoundary) && isEditable(blockBoundary) && hasValidBlocks(blockBoundary) && isNotAncestorial(blockBoundary));
 };
 
-const read = (rootNode: HTMLElement, forward: boolean, rng: Range): Optional<BlockBoundary> =>
-  rng.collapsed ? readFromRange(rootNode, forward, rng) : Optional.none();
+const read = (schema: Schema, rootNode: HTMLElement, forward: boolean, rng: Range): Optional<BlockBoundary> =>
+  rng.collapsed ? readFromRange(schema, rootNode, forward, rng) : Optional.none();
 
 export {
   read

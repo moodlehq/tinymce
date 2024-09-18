@@ -1,12 +1,14 @@
 import {
-  AddEventsBehaviour, AlloyComponent, AlloyEvents, AlloySpec, Behaviour, Button, Focusing, GuiFactory, Memento, NativeEvents, Replacing, Sketcher,
+  AlloyComponent, AlloySpec, Behaviour, Button, DomFactory, Focusing, GuiFactory, Keying, Memento, Replacing, Sketcher,
+  Tabstopping,
+  Tooltipping,
   UiSketcher
 } from '@ephox/alloy';
 import { FieldSchema } from '@ephox/boulder';
-import { Arr, Optional } from '@ephox/katamari';
+import { Arr, Id, Optional } from '@ephox/katamari';
 
-import { TranslatedString, Untranslated } from 'tinymce/core/api/util/I18n';
-
+import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import * as HtmlSanitizer from '../core/HtmlSanitizer';
 import * as Icons from '../icons/Icons';
 
 export interface NotificationSketchApis {
@@ -19,11 +21,10 @@ export interface NotificationSketchSpec extends Sketcher.SingleSketchSpec {
   readonly text: string;
   readonly level?: 'info' | 'warn' | 'warning' | 'error' | 'success';
   readonly icon?: string;
-  readonly closeButton?: boolean;
   readonly progress: boolean;
   readonly onAction: Function;
   readonly iconProvider: Icons.IconProvider;
-  readonly translationProvider: (text: Untranslated) => TranslatedString;
+  readonly backstageProvider: UiFactoryBackstageProviders;
 }
 
 // tslint:disable-next-line:no-empty-interface
@@ -31,11 +32,10 @@ export interface NotificationSketchDetail extends Sketcher.SingleSketchDetail {
   readonly text: string;
   readonly level: Optional<'info' | 'warn' | 'warning' | 'error' | 'success'>;
   readonly icon: Optional<string>;
-  readonly closeButton: boolean;
   readonly onAction: Function;
   readonly progress: boolean;
   readonly iconProvider: Icons.IconProvider;
-  readonly translationProvider: (text: Untranslated) => TranslatedString;
+  readonly backstageProvider: UiFactoryBackstageProviders;
 }
 
 export interface NotificationSketcher extends Sketcher.SingleSketch<NotificationSketchSpec>, NotificationSketchApis {
@@ -53,11 +53,9 @@ const notificationIconMap = {
 
 const factory: UiSketcher.SingleSketchFactory<NotificationSketchDetail, NotificationSketchSpec> = (detail) => {
   // For using the alert banner as a standalone banner
+  const notificationTextId = Id.generate('notification-text');
   const memBannerText = Memento.record({
-    dom: {
-      tag: 'p',
-      innerHtml: detail.translationProvider(detail.text)
-    },
+    dom: DomFactory.fromHtml(`<p id=${notificationTextId}>${HtmlSanitizer.sanitizeHtmlString(detail.backstageProvider.translate(detail.text))}</p>`),
     behaviours: Behaviour.derive([
       Replacing.config({ })
     ])
@@ -145,17 +143,25 @@ const factory: UiSketcher.SingleSketchFactory<NotificationSketchDetail, Notifica
   const memButton = Memento.record(Button.sketch({
     dom: {
       tag: 'button',
-      classes: [ 'tox-notification__dismiss', 'tox-button', 'tox-button--naked', 'tox-button--icon' ]
+      classes: [ 'tox-notification__dismiss', 'tox-button', 'tox-button--naked', 'tox-button--icon' ],
+      attributes: {
+        'aria-label': detail.backstageProvider.translate('Close')
+      }
     },
     components: [
       Icons.render('close', {
-        tag: 'div',
+        tag: 'span',
         classes: [ 'tox-icon' ],
-        attributes: {
-          'aria-label': detail.translationProvider('Close')
-        }
       }, detail.iconProvider)
     ],
+    buttonBehaviours: Behaviour.derive([
+      Tabstopping.config({}),
+      Tooltipping.config({
+        ...detail.backstageProvider.tooltips.getConfig({
+          tooltipText: detail.backstageProvider.translate('Close')
+        })
+      })
+    ]),
     action: (comp) => {
       detail.onAction(comp);
     }
@@ -182,23 +188,27 @@ const factory: UiSketcher.SingleSketchFactory<NotificationSketchDetail, Notifica
     dom: {
       tag: 'div',
       attributes: {
-        role: 'alert'
+        'role': 'alert',
+        'aria-labelledby': notificationTextId
       },
       classes: detail.level.map((level) => [ 'tox-notification', 'tox-notification--in', `tox-notification--${level}` ]).getOr(
         [ 'tox-notification', 'tox-notification--in' ]
       )
     },
     behaviours: Behaviour.derive([
+      Tabstopping.config({ }),
       Focusing.config({ }),
-      AddEventsBehaviour.config('notification-events', [
-        AlloyEvents.run(NativeEvents.focusin(), (comp) => {
-          memButton.getOpt(comp).each(Focusing.focus);
-        })
-      ])
+      Keying.config({
+        mode: 'special',
+        onEscape: (comp) => {
+          detail.onAction(comp);
+          return Optional.some(true);
+        }
+      })
     ]),
     components: components
       .concat(detail.progress ? [ memBannerProgress.asSpec() ] : [])
-      .concat(!detail.closeButton ? [] : [ memButton.asSpec() ]),
+      .concat([ memButton.asSpec() ]),
     apis
   };
 };
@@ -213,8 +223,7 @@ export const Notification: NotificationSketcher = Sketcher.single({
     FieldSchema.required('onAction'),
     FieldSchema.required('text'),
     FieldSchema.required('iconProvider'),
-    FieldSchema.required('translationProvider'),
-    FieldSchema.defaultedBoolean('closeButton', true)
+    FieldSchema.required('backstageProvider'),
   ],
   apis: {
     updateProgress: (apis: NotificationSketchApis, comp: AlloyComponent, percent: number) => {

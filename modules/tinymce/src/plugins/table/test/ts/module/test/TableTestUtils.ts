@@ -6,8 +6,8 @@
  */
 
 import { ApproxStructure, Assertions, Cursors, Mouse, StructAssert, UiFinder, Waiter } from '@ephox/agar';
-import { Obj } from '@ephox/katamari';
-import { Attribute, Checked, Class, SelectorFind, SugarBody, Value } from '@ephox/sugar';
+import { Arr, Obj } from '@ephox/katamari';
+import { Attribute, Checked, Class, Insert, SelectorFind, SugarBody, SugarElement, TextContent, Value } from '@ephox/sugar';
 import { TinyDom, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
@@ -79,11 +79,13 @@ const pAssertDialogPresence = async (label: string, editor: Editor, expected: Re
   );
 };
 
-const pAssertListBoxValue = async (label: string, editor: Editor, section: string, expected: string): Promise<void> => {
+const pAssertListBox = async (label: string, editor: Editor, section: string, expected: { title: string; value: string }): Promise<void> => {
   const dialog = await TinyUiActions.pWaitForDialog(editor);
   const elem = UiFinder.findIn(dialog, 'label:contains("' + section + '") + .tox-listboxfield > .tox-listbox').getOrDie();
   const value = Attribute.get(elem, 'data-value');
-  assert.equal(value, expected, 'Checking listbox: ' + label);
+  assert.equal(value, expected.value, 'Checking listbox value: ' + label);
+  const text = TextContent.get(elem);
+  assert.equal(text, expected.title, 'Checking listbox text: ' + label);
 };
 
 const getInput = (selector: string) =>
@@ -228,15 +230,38 @@ const createTableChildren = (s: ApproxStructure.StructApi, str: ApproxStructure.
   return withColGroups ? [ columns, tbody ] : [ tbody ];
 };
 
-const withNoneditableRootEditor = (editor: Editor, f: (editor: Editor) => void): void => {
-  editor.getBody().contentEditable = 'false';
-  f(editor);
-  editor.getBody().contentEditable = 'true';
+const createRow = (cellContents: string[]): SugarElement<HTMLTableRowElement> => {
+  const tr = SugarElement.fromTag('tr');
+  Arr.each(cellContents, (content) => {
+    const td = SugarElement.fromTag('td');
+    TextContent.set(td, content);
+    Insert.append(tr, td);
+  });
+
+  return tr;
+};
+
+const openPropsDialog = async (editor: Editor, dialogCommand: `mceTable${'' | 'Cell' | 'Row'}Props`): Promise<void> => {
+  editor.execCommand(dialogCommand);
+  await TinyUiActions.pWaitForDialog(editor);
+};
+
+const selectListBoxValue = async (editor: Editor, section: string, title: string): Promise<void> => {
+  TinyUiActions.clickOnUi(editor, `button[aria-label="${section}"].tox-listbox--select`);
+  await TinyUiActions.pWaitForUi(editor, 'div[role="listbox"].tox-menu.tox-collection--list');
+  TinyUiActions.clickOnUi(editor, `div[aria-label="${title}"].tox-collection__item`);
+};
+
+const pOpenContextMenu = async (editor: Editor, selector: string): Promise<void> => {
+  await TinyUiActions.pTriggerContextMenu(editor, selector, '.tox-silver-sink .tox-menu.tox-collection [role="menuitem"]');
+};
+const sanitizeString = (input: string): string => {
+  return input.replace(/\s+/g, ' ').trim();
 };
 
 export {
   pAssertDialogPresence,
-  pAssertListBoxValue,
+  pAssertListBox,
   openContextToolbarOn,
   assertTableStructure,
   createTableChildren,
@@ -249,5 +274,9 @@ export {
   pClickDialogButton,
   assertElementStructure,
   assertApproxElementStructure,
-  withNoneditableRootEditor
+  createRow,
+  openPropsDialog,
+  selectListBoxValue,
+  pOpenContextMenu,
+  sanitizeString
 };

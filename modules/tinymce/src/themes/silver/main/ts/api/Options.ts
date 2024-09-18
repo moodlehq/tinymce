@@ -215,6 +215,11 @@ const register = (editor: Editor): void => {
     processor: 'object'
   });
 
+  registerOption('ui_mode', {
+    processor: 'string',
+    default: 'combined'
+  });
+
   registerOption('file_picker_callback', {
     processor: 'function'
   });
@@ -276,6 +281,17 @@ const register = (editor: Editor): void => {
   registerOption('sidebar_show', {
     processor: 'string'
   });
+
+  // This option is being registered in the theme instead of the help plugin as it cannot be accessed from the theme when registered there
+  registerOption('help_accessibility', {
+    processor: 'boolean',
+    default: editor.hasPlugin('help')
+  });
+
+  registerOption('default_font_stack', {
+    processor: 'string[]',
+    default: []
+  });
 };
 
 const isReadOnly = option('readonly');
@@ -314,6 +330,8 @@ const getResize = option('resize');
 const getPasteAsText = option('paste_as_text');
 const getSidebarShow = option('sidebar_show');
 const promotionEnabled = option('promotion');
+const useHelpAccessibility = option('help_accessibility');
+const getDefaultFontStack = option('default_font_stack');
 
 const isSkinDisabled = (editor: Editor): boolean =>
   editor.options.get('skin') === false;
@@ -335,6 +353,8 @@ const getSkinUrl = (editor: Editor): string | undefined => {
     }
   }
 };
+
+const getSkinUrlOption = (editor: Editor): Optional<string> => Optional.from(editor.options.get('skin_url'));
 
 const getLineHeightFormats = (editor: Editor): string[] =>
   editor.options.get('line_height_formats').split(' ');
@@ -406,6 +426,9 @@ const isStickyToolbar = (editor: Editor): boolean => {
   return (isStickyToolbar || editor.inline) && !useFixedContainer(editor) && !isDistractionFree(editor);
 };
 
+const isSplitUiMode = (editor: Editor): boolean =>
+  !useFixedContainer(editor) && editor.options.get('ui_mode') === 'split';
+
 const getMenus = (editor: Editor): Record<string, { title: string; items: string }> => {
   const menu = editor.options.get('menu');
   return Obj.map(menu, (menu) => ({ ...menu, items: menu.items }));
@@ -414,6 +437,7 @@ const getMenus = (editor: Editor): Record<string, { title: string; items: string
 export {
   register,
   getSkinUrl,
+  getSkinUrlOption,
   isReadOnly,
   isSkinDisabled,
   getHeightOption,
@@ -435,6 +459,7 @@ export {
   getMultipleToolbarsOption,
   getUiContainer,
   useFixedContainer,
+  isSplitUiMode,
   getToolbarMode,
   isDraggableModal,
   isDistractionFree,
@@ -459,5 +484,7 @@ export {
   useBranding,
   getResize,
   getPasteAsText,
-  getSidebarShow
+  getSidebarShow,
+  useHelpAccessibility,
+  getDefaultFontStack
 };

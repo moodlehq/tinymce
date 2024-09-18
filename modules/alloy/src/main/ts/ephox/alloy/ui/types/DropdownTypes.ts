@@ -16,6 +16,7 @@ export interface CommonDropdownDetail<F> extends CompositeSketchDetail, HasLayou
   components: AlloySpec[ ];
 
   role: Optional<string>;
+  listRole: Optional<string>;
   eventOrder: Record<string, string[]>;
   fetch: (comp: AlloyComponent) => Future<Optional<F>>;
   onOpen: (anchor: AnchorSpec, comp: AlloyComponent, menu: AlloyComponent) => void;
@@ -58,7 +59,7 @@ export interface DropdownSpec extends CompositeSketchSpec, HasLayoutAnchorSpec {
   sandboxClasses?: string[];
   sandboxBehaviours?: AlloyBehaviourRecord;
   getHotspot?: (comp: AlloyComponent) => Optional<AlloyComponent>;
-  getAnchorOverrides?: () => () => AnchorOverrides;
+  getAnchorOverrides?: () => AnchorOverrides;
 
   toggleClass: string;
   lazySink?: LazySink;

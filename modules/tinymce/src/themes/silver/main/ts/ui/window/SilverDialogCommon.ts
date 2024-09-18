@@ -3,14 +3,14 @@ import {
   SystemEvents
 } from '@ephox/alloy';
 import { Dialog, DialogManager } from '@ephox/bridge';
-import { Arr, Cell, Optional } from '@ephox/katamari';
+import { Arr, Cell, Obj, Optional } from '@ephox/katamari';
+import { Class, Classes, Height, SelectorFind, SugarElement } from '@ephox/sugar';
 
 import { UiFactoryBackstage, UiFactoryBackstageProviders } from '../../backstage/Backstage';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
 import { StoredMenuButton, StoredMenuItem } from '../button/MenuButton';
 import * as Dialogs from '../dialog/Dialogs';
 import { FormBlockEvent, formCancelEvent } from '../general/FormEvents';
-import { dialogChannel } from './DialogChannels';
 import { ExtraListeners } from './SilverDialogEvents';
 import { renderModalHeader } from './SilverDialogHeader';
 
@@ -37,7 +37,7 @@ const getHeader = (title: string, dialogId: string, backstage: UiFactoryBackstag
   draggable: backstage.dialog.isDraggableModal()
 }, dialogId, backstage.shared.providers);
 
-const getBusySpec = (message: string, bs: Behaviour.AlloyBehaviourRecord, providers: UiFactoryBackstageProviders): AlloySpec => ({
+const getBusySpec = (message: string, bs: Behaviour.AlloyBehaviourRecord, providers: UiFactoryBackstageProviders, headerHeight: Optional<number>): AlloySpec => ({
   dom: {
     tag: 'div',
     classes: [ 'tox-dialog__busy-spinner' ],
@@ -48,7 +48,7 @@ const getBusySpec = (message: string, bs: Behaviour.AlloyBehaviourRecord, provid
       left: '0px',
       right: '0px',
       bottom: '0px',
-      top: '0px',
+      top: `${headerHeight.getOr(0)}px`,
       position: 'absolute'
     }
   },
@@ -61,48 +61,67 @@ const getBusySpec = (message: string, bs: Behaviour.AlloyBehaviourRecord, provid
 const getEventExtras = (lazyDialog: () => AlloyComponent, providers: UiFactoryBackstageProviders, extra: SharedWindowExtra): ExtraListeners => ({
   onClose: () => extra.closeWindow(),
   onBlock: (blockEvent: FormBlockEvent) => {
-    ModalDialog.setBusy(lazyDialog(), (_comp, bs) => getBusySpec(blockEvent.message, bs, providers));
+    const headerHeight = SelectorFind.descendant<HTMLElement>(lazyDialog().element, '.tox-dialog__header').map((header) => Height.get(header));
+    ModalDialog.setBusy(lazyDialog(), (_comp, bs) => getBusySpec(blockEvent.message, bs, providers, headerHeight));
   },
   onUnblock: () => {
     ModalDialog.setIdle(lazyDialog());
   }
 });
 
-const renderModalDialog = <T>(spec: DialogSpec, initialData: T, dialogEvents: AlloyEvents.AlloyEventKeyAndHandler<any>[], backstage: UiFactoryBackstage): AlloyComponent => {
-  const updateState = (_comp: AlloyComponent, incoming: T) => Optional.some(incoming);
+const fullscreenClass = 'tox-dialog--fullscreen';
+const largeDialogClass = 'tox-dialog--width-lg';
+const mediumDialogClass = 'tox-dialog--width-md';
 
-  return GuiFactory.build(Dialogs.renderDialog({
-    ...spec,
-    firstTabstop: 1,
-    lazySink: backstage.shared.getSink,
-    extraBehaviours: [
-      // Because this doesn't define `renderComponents`, all this does is update the state.
-      // We use the state for the initialData. The other parts (body etc.) render the
-      // components based on what reflecting receives.
-      Reflecting.config({
-        channel: `${dialogChannel}-${spec.id}`,
-        updateState,
-        initialData
-      }),
-      RepresentingConfigs.memory({ }),
-      ...spec.extraBehaviours
-    ],
-    onEscape: (comp) => {
-      AlloyTriggers.emit(comp, formCancelEvent);
-    },
-    dialogEvents,
-    eventOrder: {
-      [SystemEvents.receive()]: [ Reflecting.name(), Receiving.name() ],
-      [SystemEvents.attachedToDom()]: [ 'scroll-lock', Reflecting.name(), 'messages', 'dialog-events', 'alloy.base.behaviour' ],
-      [SystemEvents.detachedFromDom()]: [ 'alloy.base.behaviour', 'dialog-events', 'messages', Reflecting.name(), 'scroll-lock' ]
-    }
-  }));
+const getDialogSizeClass = (size: Dialog.DialogSize): Optional<string> => {
+  switch (size) {
+    case 'large':
+      return Optional.some(largeDialogClass);
+    case 'medium':
+      return Optional.some(mediumDialogClass);
+    default:
+      return Optional.none();
+  }
 };
 
-const mapMenuButtons = (buttons: Dialog.DialogFooterButton[]): (Dialog.DialogFooterButton | StoredMenuButton)[] => {
+const updateDialogSizeClass = (size: Dialog.DialogSize, component: AlloyComponent): void => {
+  const dialogBody = SugarElement.fromDom(component.element.dom);
+  if (!Class.has(dialogBody, fullscreenClass)) {
+    Classes.remove(dialogBody, [ largeDialogClass, mediumDialogClass ]);
+    getDialogSizeClass(size).each((dialogSizeClass) => Class.add(dialogBody, dialogSizeClass));
+  }
+};
+
+const toggleFullscreen = (comp: AlloyComponent, currentSize: Dialog.DialogSize): void => {
+  const dialogBody = SugarElement.fromDom(comp.element.dom);
+  const classes = Classes.get(dialogBody);
+  const currentSizeClass = Arr.find(classes, (c) => c === largeDialogClass || c === mediumDialogClass).or(getDialogSizeClass(currentSize));
+  Classes.toggle(dialogBody, [ fullscreenClass, ...currentSizeClass.toArray() ]);
+};
+
+const renderModalDialog = (spec: DialogSpec, dialogEvents: AlloyEvents.AlloyEventKeyAndHandler<any>[], backstage: UiFactoryBackstage): AlloyComponent => GuiFactory.build(Dialogs.renderDialog({
+  ...spec,
+  firstTabstop: 1,
+  lazySink: backstage.shared.getSink,
+  extraBehaviours: [
+    RepresentingConfigs.memory({ }),
+    ...spec.extraBehaviours
+  ],
+  onEscape: (comp) => {
+    AlloyTriggers.emit(comp, formCancelEvent);
+  },
+  dialogEvents,
+  eventOrder: {
+    [SystemEvents.receive()]: [ Reflecting.name(), Receiving.name() ],
+    [SystemEvents.attachedToDom()]: [ 'scroll-lock', Reflecting.name(), 'messages', 'dialog-events', 'alloy.base.behaviour' ],
+    [SystemEvents.detachedFromDom()]: [ 'alloy.base.behaviour', 'dialog-events', 'messages', Reflecting.name(), 'scroll-lock' ]
+  }
+}));
+
+const mapMenuButtons = (buttons: Dialog.DialogFooterButton[], menuItemStates: Record<string, Cell<boolean>> = {}): (Dialog.DialogFooterButton | StoredMenuButton)[] => {
   const mapItems = (button: Dialog.DialogFooterMenuButton): StoredMenuButton => {
     const items = Arr.map(button.items, (item: Dialog.DialogFooterToggleMenuItem): StoredMenuItem => {
-      const cell = Cell<boolean>(false);
+      const cell = Obj.get(menuItemStates, item.name).getOr(Cell<boolean>(false));
       return {
         ...item,
         storage: cell
@@ -135,6 +154,9 @@ export {
   getBusySpec,
   getHeader,
   getEventExtras,
+  updateDialogSizeClass,
+  getDialogSizeClass,
+  toggleFullscreen,
   renderModalDialog,
   mapMenuButtons,
   extractCellsToObject

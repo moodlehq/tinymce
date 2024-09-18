@@ -4,63 +4,88 @@ import {
   Receiving, Reflecting, Replacing, SystemEvents
 } from '@ephox/alloy';
 import { Dialog, DialogManager } from '@ephox/bridge';
-import { Fun, Id, Optional } from '@ephox/katamari';
-import { Attribute, Classes, SugarElement, SugarNode } from '@ephox/sugar';
+import { Cell, Fun, Id, Optional, Optionals } from '@ephox/katamari';
+import { PlatformDetection } from '@ephox/sand';
+import { Attribute, Height, SugarNode } from '@ephox/sugar';
 
-import { UiFactoryBackstage } from '../../backstage/Backstage';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
-import { formCloseEvent } from '../general/FormEvents';
+import * as Backstage from '../../backstage/Backstage';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
+import * as FormEvents from '../general/FormEvents';
 import * as NavigableObject from '../general/NavigableObject';
-import { dialogChannel } from './DialogChannels';
-import { renderInlineBody } from './SilverDialogBody';
+import * as DialogChannels from './DialogChannels';
+import * as SilverDialogBody from './SilverDialogBody';
 import * as SilverDialogCommon from './SilverDialogCommon';
-import { SilverDialogEvents } from './SilverDialogEvents';
-import { renderInlineFooter } from './SilverDialogFooter';
-import { renderInlineHeader } from './SilverDialogHeader';
-import { getDialogApi } from './SilverDialogInstanceApi';
+import * as SilverDialogEvents from './SilverDialogEvents';
+import * as SilverDialogFooter from './SilverDialogFooter';
+import * as SilverDialogHeader from './SilverDialogHeader';
+import * as SilverDialogInstanceApi from './SilverDialogInstanceApi';
 
 interface RenderedDialog<T extends Dialog.DialogData> {
   readonly dialog: AlloyComponent;
   readonly instanceApi: Dialog.DialogInstanceApi<T>;
 }
 
-const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManager.DialogInit<T>, extra: SilverDialogCommon.WindowExtra<T>, backstage: UiFactoryBackstage, ariaAttrs: boolean): RenderedDialog<T> => {
+const renderInlineDialog = <T extends Dialog.DialogData>(
+  dialogInit: DialogManager.DialogInit<T>,
+  extra: SilverDialogCommon.WindowExtra<T>,
+  backstage: Backstage.UiFactoryBackstage,
+  ariaAttrs: boolean = false,
+  refreshDocking: () => void
+): RenderedDialog<T> => {
   const dialogId = Id.generate('dialog');
   const dialogLabelId = Id.generate('dialog-label');
   const dialogContentId = Id.generate('dialog-content');
   const internalDialog = dialogInit.internalDialog;
 
-  const updateState = (_comp: AlloyComponent, incoming: DialogManager.DialogInit<T>) => Optional.some(incoming);
+  const getCompByName = (name: string) => SilverDialogInstanceApi.getCompByName(modalAccess, name);
+
+  const dialogSize = Cell<Dialog.DialogSize>(internalDialog.size);
+
+  const dialogSizeClass = SilverDialogCommon.getDialogSizeClass(dialogSize.get()).toArray();
+
+  // Reflecting behaviour broadcasts on dialog channel only on redial.
+  const updateState = (comp: AlloyComponent, incoming: DialogManager.DialogInit<T>) => {
+    // Update dialog size and position upon redial.
+    dialogSize.set(incoming.internalDialog.size);
+    SilverDialogCommon.updateDialogSizeClass(incoming.internalDialog.size, comp);
+    refreshDocking();
+    return Optional.some(incoming);
+  };
 
   const memHeader = Memento.record(
-    renderInlineHeader({
+    SilverDialogHeader.renderInlineHeader({
       title: internalDialog.title,
       draggable: true
     }, dialogId, dialogLabelId, backstage.shared.providers)
   );
 
   const memBody = Memento.record(
-    renderInlineBody({
+    SilverDialogBody.renderInlineBody({
       body: internalDialog.body,
       initialData: internalDialog.initialData,
-    }, dialogId, dialogContentId, backstage, ariaAttrs)
+    }, dialogId, dialogContentId, backstage, ariaAttrs, getCompByName)
   );
 
   const storagedMenuButtons = SilverDialogCommon.mapMenuButtons(internalDialog.buttons);
 
   const objOfCells = SilverDialogCommon.extractCellsToObject(storagedMenuButtons);
 
-  const memFooter = Memento.record(
-    renderInlineFooter({
-      buttons: storagedMenuButtons
-    }, dialogId, backstage)
-  );
+  const optMemFooter = Optionals.someIf(
+    storagedMenuButtons.length !== 0,
+    Memento.record(
+      SilverDialogFooter.renderInlineFooter({
+        buttons: storagedMenuButtons
+      }, dialogId, backstage)
+    ));
 
   const dialogEvents = SilverDialogEvents.initDialog(
     () => instanceApi,
     {
       onBlock: (event) => {
-        Blocking.block(dialog, (_comp, bs) => SilverDialogCommon.getBusySpec(event.message, bs, backstage.shared.providers));
+        Blocking.block(dialog, (_comp, bs) => {
+          const headerHeight = memHeader.getOpt(dialog).map((dialog) => Height.get(dialog.element));
+          return SilverDialogCommon.getBusySpec(event.message, bs, backstage.shared.providers, headerHeight);
+        });
       },
       onUnblock: () => {
         Blocking.unblock(dialog);
@@ -72,15 +97,17 @@ const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManag
 
   const inlineClass = 'tox-dialog-inline';
 
+  const os = PlatformDetection.detect().os;
+
   // TODO: Disable while validating?
   const dialog = GuiFactory.build({
     dom: {
       tag: 'div',
-      classes: [ 'tox-dialog', inlineClass ],
+      classes: [ 'tox-dialog', inlineClass, ...dialogSizeClass ],
       attributes: {
         role: 'dialog',
-        ['aria-labelledby']: dialogLabelId,
-        ['aria-describedby']: dialogContentId
+        // TINY-10808 - Workaround to address the dialog header not being announced on VoiceOver with aria-labelledby, ideally we should use the aria-labelledby
+        ...os.isMacOS() ? { 'aria-label': internalDialog.title } : { 'aria-labelledby': dialogLabelId }
       }
     },
     eventOrder: {
@@ -94,7 +121,7 @@ const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManag
       Keying.config({
         mode: 'cyclic',
         onEscape: (c) => {
-          AlloyTriggers.emit(c, formCloseEvent);
+          AlloyTriggers.emit(c, FormEvents.formCloseEvent);
           return Optional.some(true);
         },
         useTabstopAt: (elem) => !NavigableObject.isPseudoStop(elem) && (
@@ -103,7 +130,7 @@ const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManag
         firstTabstop: 1
       }),
       Reflecting.config({
-        channel: `${dialogChannel}-${dialogId}`,
+        channel: `${DialogChannels.dialogChannel}-${dialogId}`,
         updateState,
         initialData: dialogInit
       }),
@@ -115,6 +142,11 @@ const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManag
           // Using just `run` instead will cause an infinite loop as `focusIn` would fire a `focusin` which would then get responded to and so forth.
           AlloyEvents.runOnSource(NativeEvents.focusin(), (comp, _se) => {
             Keying.focusIn(comp);
+          }),
+          AlloyEvents.run<SystemEvents.AlloyFocusShiftedEvent>(SystemEvents.focusShifted(), (comp, se) => {
+            comp.getSystem().broadcastOn([ DialogChannels.dialogFocusShiftedChannel ], {
+              newFocus: se.event.newFocus
+            });
           })
         ])
       ),
@@ -126,34 +158,27 @@ const renderInlineDialog = <T extends Dialog.DialogData>(dialogInit: DialogManag
     components: [
       memHeader.asSpec(),
       memBody.asSpec(),
-      memFooter.asSpec()
+      ...optMemFooter.map((memFooter) => memFooter.asSpec()).toArray()
     ]
   });
 
   const toggleFullscreen = (): void => {
-    const fullscreenClass = 'tox-dialog--fullscreen';
-    const sugarBody = SugarElement.fromDom(dialog.element.dom);
-    if (!Classes.hasAll(sugarBody, [ fullscreenClass ])) {
-      Classes.remove(sugarBody, [ inlineClass ]);
-      Classes.add(sugarBody, [ fullscreenClass ]);
-    } else {
-      Classes.remove(sugarBody, [ fullscreenClass ]);
-      Classes.add(sugarBody, [ inlineClass ]);
-    }
+    SilverDialogCommon.toggleFullscreen(dialog, dialogSize.get());
   };
 
   // TODO: Clean up the dupe between this (InlineDialog) and SilverDialog
-  const instanceApi = getDialogApi<T>({
+  const modalAccess: SilverDialogInstanceApi.DialogAccess = {
     getId: Fun.constant(dialogId),
     getRoot: Fun.constant(dialog),
-    getFooter: () => memFooter.get(dialog),
+    getFooter: () => optMemFooter.map((memFooter) => memFooter.get(dialog)),
     getBody: () => memBody.get(dialog),
     getFormWrapper: () => {
       const body = memBody.get(dialog);
       return Composing.getCurrent(body).getOr(body);
     },
     toggleFullscreen
-  }, extra.redial, objOfCells);
+  };
+  const instanceApi = SilverDialogInstanceApi.getDialogApi<T>(modalAccess, extra.redial, objOfCells);
 
   return {
     dialog,

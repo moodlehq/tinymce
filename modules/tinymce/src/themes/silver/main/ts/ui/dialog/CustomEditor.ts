@@ -1,11 +1,11 @@
-import { AddEventsBehaviour, AlloyEvents, Behaviour, Memento, SimpleSpec } from '@ephox/alloy';
+import { AddEventsBehaviour, AlloyEvents, Behaviour, Focusing, Memento, SimpleSpec, Tabstopping } from '@ephox/alloy';
 import { Dialog } from '@ephox/bridge';
 import { Obj, Optional, Singleton } from '@ephox/katamari';
 
 import Resource from 'tinymce/core/api/Resource';
 
 import { ComposingConfigs } from '../alien/ComposingConfigs';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
 
 type CustomEditorSpec = Dialog.CustomEditor;
 type CustomEditorInitFn = Dialog.CustomEditorInitFn;
@@ -23,6 +23,16 @@ export const renderCustomEditor = (spec: CustomEditorSpec): SimpleSpec => {
   });
 
   const initialValue = Singleton.value<string>();
+  const focusBehaviour = !isOldCustomEditor(spec) && spec.onFocus.isSome() ? [
+    Focusing.config({
+      onFocus: (comp) => {
+        spec.onFocus.each((onFocusFn) => {
+          onFocusFn(comp.element.dom);
+        });
+      }
+    }),
+    Tabstopping.config({})
+  ] : [];
 
   return {
     dom: {
@@ -55,16 +65,15 @@ export const renderCustomEditor = (spec: CustomEditorSpec): SimpleSpec => {
           () => initialValue.get().getOr(''),
           (ed) => ed.getValue()
         ),
-        (component, value) => {
+        (_component, value) => {
           editorApi.get().fold(
             () => initialValue.set(value),
             (ed) => ed.setValue(value)
           );
         }
       ),
-
       ComposingConfigs.self()
-    ]),
+    ].concat(focusBehaviour)),
     components: [ memReplaced.asSpec() ]
   };
 };

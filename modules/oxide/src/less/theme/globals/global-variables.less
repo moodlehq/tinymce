@@ -16,6 +16,8 @@
 @color-tint: #006ce7;
 @color-white: #fff;
 @color-error: #c00;
+@color-error-element-focus-color: #f00;
+@color-error-element-focus: 0 0 0 1px @color-error-element-focus-color;
 @color-success: #78AB46;
 @font-stack: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
 
@@ -24,13 +26,17 @@
 @content-ui-darkmode: false; // Change this to true to get white icons in the content such as bookmarks.
 
 // Colors
-@border-color: contrast(@background-color, darken(@background-color, 30%), lighten(@background-color, 30%));
+@border-color: darken(@background-color, 6.5%);
 @text-color: contrast(@background-color, @color-black, @color-white);
 @text-color-muted: contrast(@background-color, fade(@color-black, 70%), fade(@color-white, 50%));
 
 // Some useful generic variables
 @panel-border-radius: 6px; // Dialogs, menues etc.
 @control-border-radius: 6px; // Buttons, input fields etc.
+
+// Focus outline
+@keyboard-focus-outline-width: 2px;
+@keyboard-focus-outline-color: @color-tint;
 
 // Font
 @line-height-base: 1.3;

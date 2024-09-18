@@ -1,7 +1,7 @@
 import { Assertions, Cursors, Waiter } from '@ephox/agar';
 import { beforeEach, context, describe, it } from '@ephox/bedrock-client';
 import { Cell } from '@ephox/katamari';
-import { SugarElement } from '@ephox/sugar';
+import { Insert, Remove, SugarBody, SugarElement } from '@ephox/sugar';
 import { TinyDom, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
@@ -9,6 +9,7 @@ import Editor from 'tinymce/core/api/Editor';
 import { ScrollIntoViewEvent } from 'tinymce/core/api/EventTypes';
 import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
 import * as ScrollIntoView from 'tinymce/core/dom/ScrollIntoView';
+import * as InsertNewLine from 'tinymce/core/newline/InsertNewLine';
 
 interface State {
   readonly elm: HTMLElement;
@@ -24,6 +25,7 @@ describe('browser.tinymce.core.dom.ScrollIntoViewTest', () => {
   const hook = TinyHooks.bddSetup<Editor>({
     add_unload_trigger: false,
     height: 500,
+    width: 1000,
     base_url: '/project/tinymce/js/tinymce',
     content_style: 'body.mce-content-body  { margin: 0 }'
   }, [], true);
@@ -56,11 +58,19 @@ describe('browser.tinymce.core.dom.ScrollIntoViewTest', () => {
     ScrollIntoView.scrollRangeIntoView(editor, rng);
   };
 
-  const assertScrollPosition = (editor: Editor, x: number, y: number) => {
+  const assertHorizontalScrollPosition = (editor: Editor, x: number) => {
     const actualX = Math.round(editor.dom.getViewPort(editor.getWin()).x);
+    assert.approximately(actualX, x, 3, `Scroll position X should be expected value: ${x} got ${actualX}`);
+  };
+
+  const assertVerticalScrollPosition = (editor: Editor, y: number) => {
     const actualY = Math.round(editor.dom.getViewPort(editor.getWin()).y);
-    assert.equal(actualX, x, `Scroll position X should be expected value: ${x} got ${actualX}`);
-    assert.equal(actualY, y, `Scroll position Y should be expected value: ${y} got ${actualY}`);
+    assert.approximately(actualY, y, 3, `Scroll position Y should be expected value: ${y} got ${actualY}`);
+  };
+
+  const assertScrollPosition = (editor: Editor, x: number, y: number) => {
+    assertHorizontalScrollPosition(editor, x);
+    assertVerticalScrollPosition(editor, y);
   };
 
   const assertApproxScrollPosition = (editor: Editor, x: number, y: number) => {
@@ -139,6 +149,45 @@ describe('browser.tinymce.core.dom.ScrollIntoViewTest', () => {
       editor.selection.scrollIntoView();
       assertScrollPosition(editor, 0, 689);
     });
+
+    it('TINY-9747: when the selection is scrolled into view selection if there is an horizontal scroll it should preserve the correct left position', async () => {
+      const editor = hook.editor();
+      await pSetContent(editor, `<div class="container-with-horizontal-scroll" style="margin-left: 100px">
+        <div style="height: 1000px; width: 2000px">a</div>
+        <div style="height: 50px">b</div>
+        <div style="height: 600px">a</div>
+      </div>`);
+
+      TinySelections.setCursor(editor, [ 0, 2, 0 ], 0);
+      editor.selection.scrollIntoView();
+      /*
+        TINY-9747: here the assertion on vertical scroll has a different value on a different browser
+        because if the scrollbar is showed to have the element `a` inside the view the required scroll is different:
+
+        ----   ----
+        |      |
+        |      a
+        a      scrollbar
+        ----   ----
+      */
+      assertHorizontalScrollPosition(editor, 0);
+    });
+
+    it('TINY-9776: when the selection is scrolled into view selection if there is an horizontal scroll it should preserve the correct left position', async () => {
+      const editor = hook.editor();
+      await pSetContent(editor, `<div class="container-with-horizontal-scroll" style="margin-left: 100px">
+        <div style="height: 1000px; width: 2000px">a</div>
+        <div style="height: 50px">b</div>
+        <div style="height: 600px">a</div>
+      </div>`);
+      const leftScroll = 100;
+      TinySelections.setCursor(editor, [ 0, 2, 0 ], 0);
+      editor.getDoc().documentElement.scrollBy({ left: leftScroll });
+
+      editor.selection.scrollIntoView();
+
+      assertHorizontalScrollPosition(editor, leftScroll);
+    });
   });
 
   context('Private ScrollElementIntoView', () => {
@@ -207,5 +256,50 @@ describe('browser.tinymce.core.dom.ScrollIntoViewTest', () => {
       assertScrollIntoViewEventInfo(editor, value, 'div:nth-child(2)', true);
       assertScrollPosition(editor, 0, 0);
     });
+  });
+});
+
+context('scrollToMarker should not scroll the container', () => {
+  const insertNewline = (editor: Editor, args: Partial<EditorEvent<KeyboardEvent>>) => {
+    InsertNewLine.insert(editor, args as EditorEvent<KeyboardEvent>);
+  };
+  const container: SugarElement<HTMLElement> = SugarElement.fromHtml('<div id="ephox-ui" style="border: 2px solid red; margin-top: 4000px; margin-bottom: 4000px"></div>');
+
+  const setupElement = () => {
+    const element = SugarElement.fromTag('textarea');
+
+    Insert.append(SugarBody.body(), container);
+    Insert.append(container, element);
+    return {
+      element,
+      teardown: () => {
+        Remove.remove(element);
+        Remove.remove(container);
+      }
+    };
+  };
+
+  const hook = TinyHooks.bddSetupFromElement<Editor>({
+    add_unload_trigger: false,
+    height: 500,
+    width: 500,
+    toolbar: false,
+    menubar: false,
+    statusbar: false,
+    base_url: '/project/tinymce/js/tinymce',
+    content_style: 'body.mce-content-body  { margin: 0 }'
+  }, setupElement, []);
+
+  it('TINY-9776: scrollToMarker should not scroll the container', () => {
+    const editor = hook.editor();
+    TinySelections.setCursor(editor, [ 0 ], 0);
+    window.scrollTo(0, 4500);
+    editor.selection.scrollIntoView();
+
+    const initialTop = container.dom.getBoundingClientRect().top;
+    while (editor.getContainer().clientHeight > editor.getBody().clientHeight) {
+      insertNewline(editor, {});
+    }
+    assert.equal(initialTop, container.dom.getBoundingClientRect().top);
   });
 });

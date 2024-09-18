@@ -5,6 +5,7 @@
 
 @toolbar-button-select-padding: 4px;
 @toolbar-button-bespoke-background-color: contrast(@background-color, darken(@background-color, 3%), lighten(@background-color, 7%));
+@toolbar-button-bespoke-focus-background-color: @toolbar-button-bespoke-background-color;
 @toolbar-button-bespoke-label-max-width: 7em;
 @toolbar-button-bespoke-spacing-x: 4px;
 
@@ -33,6 +34,11 @@
   }
 
   .tox-tbtn__select-chevron svg {
+
+    @media (forced-colors: active) {
+      fill: currentColor;
+    }
+
     fill: @toolbar-button-chevron-color;
   }
 
@@ -40,6 +46,10 @@
   // jumping around when the content changes.
   .tox-tbtn--bespoke {
     background: @toolbar-button-bespoke-background-color;
+
+    &:focus {
+      background: @toolbar-button-bespoke-focus-background-color; // Prevent toolbar button focus background to override bespoke background
+    }
 
     & + .tox-tbtn--bespoke {
       margin-inline-start: @toolbar-button-bespoke-spacing-x;
@@ -51,5 +61,10 @@
       white-space: nowrap;
       width: @toolbar-button-bespoke-label-max-width;
     }
+  }
+
+  .tox-tbtn--disabled .tox-tbtn__select-label,
+  .tox-tbtn--select:disabled .tox-tbtn__select-label {
+    cursor: not-allowed;
   }
 }

@@ -12,7 +12,7 @@ describe('browser.tinymce.core.content.TransparentElementsTest', () => {
   const transparentElements = TransparentElements.elementNames(schema.getTransparentElements());
   const textBlockElements = TransparentElements.elementNames(schema.getTextBlockElements());
 
-  it('TINY-9172: makeElementList', () => {
+  it('TINY-9172: elementNames', () => {
     assert.deepEqual(TransparentElements.elementNames({ a: {}, h1: {}, A: {}, H1: {}}), [ 'a', 'h1' ]);
   });
 
@@ -72,6 +72,11 @@ describe('browser.tinymce.core.content.TransparentElementsTest', () => {
       expected: '<div><a href="#" data-mce-block="true"><p>link</p></a></div>'
     }));
 
+    it('TINY-10272: Should not add data-mce-block attributes inside SVG elements', () => testUpdateChildren({
+      input: '<svg><a href="#"><circle><desc><p>link</p></desc></circle></a></svg>',
+      expected: '<svg><a href="#"><circle><desc><p>link</p></desc></circle></a></svg>'
+    }));
+
     it('TINY-9232: Should split the H1 at the P element and remove any empty nodes that gets produced', () => testUpdateChildren({
       input: '<h1><a href="#"><p>link</p></a></h1>',
       expected: '<p>link</p>'
@@ -86,6 +91,23 @@ describe('browser.tinymce.core.content.TransparentElementsTest', () => {
       input: '<div><h1>a<a href="#"><p>b</p></a>c</h1></div>',
       expected: '<div><h1>a</h1><p>b</p><h1>c</h1></div>'
     }));
+
+    it('TINY-10813: Should escape elements with characters that needs to be escaped like colon', () => {
+      withScratchDiv('', (root) => {
+        const anchor = SugarElement.fromHtml('<a href="#1"><ns:block>link</ns:block></a>');
+        Insert.append(root, anchor);
+
+        const customElementsSchema = Schema({
+          custom_elements: 'ns:block' // This custom element needs to be escaped in querySelectors
+        });
+
+        assert.doesNotThrow(() => {
+          TransparentElements.updateChildren(customElementsSchema, root.dom);
+        });
+
+        assert.equal(Html.get(root), '<a href="#1" data-mce-block="true"><ns:block>link</ns:block></a>', 'Should make anchor block');
+      });
+    });
 
     it('TINY-9172: Should update all anchors in element closest to the root only', () => testUpdateCaret({
       input: '<div><a href="#"><p>link</p></a><a href="#"><p>link</p></a></div><a href="#">not this</a><a href="#"><p>not this</p></a>',
@@ -109,6 +131,12 @@ describe('browser.tinymce.core.content.TransparentElementsTest', () => {
       input: '<div><h1><a href="#"><p>link</p></a></h1></div><h1><a href="#"><p>link</p></a></h1>',
       path: [ 0, 0, 0, 0 ],
       expected: '<div><p>link</p></div><h1><a href="#"><p>link</p></a></h1>'
+    }));
+
+    it('TINY-10272: Should not add data-mce-block to closest element', () => testUpdateCaret({
+      input: '<svg><a href="#"><circle><desc><p>link</p></desc></circle></a></svg>',
+      path: [ 0 ],
+      expected: '<svg><a href="#"><circle><desc><p>link</p></desc></circle></a></svg>'
     }));
   });
 

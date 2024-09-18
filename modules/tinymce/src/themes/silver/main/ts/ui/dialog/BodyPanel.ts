@@ -1,17 +1,18 @@
-import { Behaviour, Form as AlloyForm, Keying, Memento, SimpleSpec } from '@ephox/alloy';
+import { AddEventsBehaviour, AlloyEvents, Behaviour, Form as AlloyForm, Keying, Memento, NativeEvents, SimpleSpec, AlloyComponent } from '@ephox/alloy';
 import { Dialog } from '@ephox/bridge';
 import { Arr, Fun, Optional } from '@ephox/katamari';
 
 import { UiFactoryBackstage } from '../../backstage/Backstage';
 import { ComposingConfigs } from '../alien/ComposingConfigs';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
 import * as FormValues from '../general/FormValues';
 import * as NavigableObject from '../general/NavigableObject';
 import { interpretInForm } from '../general/UiFactory';
+import { dialogFocusShiftedChannel } from '../window/DialogChannels';
 
 export type BodyPanelSpec = Omit<Dialog.Panel, 'type'>;
 
-const renderBodyPanel = (spec: BodyPanelSpec, dialogData: Dialog.DialogData, backstage: UiFactoryBackstage): SimpleSpec => {
+const renderBodyPanel = (spec: BodyPanelSpec, dialogData: Dialog.DialogData, backstage: UiFactoryBackstage, getCompByName: (name: string) => Optional<AlloyComponent>): SimpleSpec => {
   const memForm = Memento.record(
     AlloyForm.sketch((parts) => ({
       dom: {
@@ -20,7 +21,7 @@ const renderBodyPanel = (spec: BodyPanelSpec, dialogData: Dialog.DialogData, bac
       },
       // All of the items passed through the form need to be put through the interpreter
       // with their form part preserved.
-      components: Arr.map(spec.items, (item) => interpretInForm(parts, item, dialogData, backstage))
+      components: Arr.map(spec.items, (item) => interpretInForm(parts, item, dialogData, backstage, getCompByName))
     }))
   );
 
@@ -55,7 +56,15 @@ const renderBodyPanel = (spec: BodyPanelSpec, dialogData: Dialog.DialogData, bac
           },
           Fun.identity
         )
-      })
+      }),
+      AddEventsBehaviour.config('dialog-body-panel', [
+        // TINY-10101: This is to cater for the case where clicks are made into the dialog instead using keyboard navigation, as FocusShifted would not be triggered in that case.
+        AlloyEvents.run(NativeEvents.focusin(), (comp, se) => {
+          comp.getSystem().broadcastOn([ dialogFocusShiftedChannel ], {
+            newFocus: Optional.some(se.event.target)
+          });
+        }),
+      ])
     ])
   };
 };

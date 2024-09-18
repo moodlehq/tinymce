@@ -8,7 +8,7 @@ import { Attribute } from '@ephox/sugar';
 
 import { UiFactoryBackstage } from '../../backstage/Backstage';
 import { renderLabel } from '../alien/FieldLabeller';
-import { RepresentingConfigs } from '../alien/RepresentingConfigs';
+import * as RepresentingConfigs from '../alien/RepresentingConfigs';
 import { renderCommonDropdown, updateMenuText } from '../dropdown/CommonDropdown';
 import { formChangeEvent } from '../general/FormEvents';
 import ItemResponse from '../menus/item/ItemResponse';
@@ -20,17 +20,18 @@ const isSingleListItem = (item: Dialog.ListBoxItemSpec): item is Dialog.ListBoxS
 
 const dataAttribute = 'data-value';
 
-const fetchItems = (dropdownComp: AlloyComponent, name: string, items: Dialog.ListBoxItemSpec[], selectedValue: string): Array<BridgeMenu.ToggleMenuItemSpec | BridgeMenu.NestedMenuItemSpec> =>
+const fetchItems = (dropdownComp: AlloyComponent, name: string, items: Dialog.ListBoxItemSpec[], selectedValue: string, hasNestedItems: boolean): Array<BridgeMenu.ToggleMenuItemSpec | BridgeMenu.NestedMenuItemSpec> =>
   Arr.map(items, (item) => {
     if (!isSingleListItem(item)) {
       return {
         type: 'nestedmenuitem',
         text: item.text,
-        getSubmenuItems: () => fetchItems(dropdownComp, name, item.items, selectedValue)
+        getSubmenuItems: () => fetchItems(dropdownComp, name, item.items, selectedValue, hasNestedItems)
       };
     } else {
       return {
         type: 'togglemenuitem',
+        ...(hasNestedItems ? {} : { role: 'option' }),
         text: item.text,
         value: item.value,
         active: item.value === selectedValue,
@@ -53,6 +54,7 @@ const findItemByValue = (items: Dialog.ListBoxItemSpec[], value: string): Option
   });
 
 export const renderListBox = (spec: ListBoxSpec, backstage: UiFactoryBackstage, initialData: Optional<string>): SketchSpec => {
+  const hasNestedItems = Arr.exists(spec.items, (item) => !isSingleListItem(item));
   const providersBackstage = backstage.shared.providers;
   const initialItem = initialData
     .bind((value) => findItemByValue(spec.items, value))
@@ -67,10 +69,12 @@ export const renderListBox = (spec: ListBoxSpec, backstage: UiFactoryBackstage, 
         uid: sketchSpec.uid,
         text: initialItem.map((item) => item.text),
         icon: Optional.none(),
-        tooltip: spec.label,
-        role: Optional.none(),
+        tooltip: Optional.none(),
+        role: Optionals.someIf(!hasNestedItems, 'combobox'),
+        ...(hasNestedItems ? {} : { listRole: 'listbox' }),
+        ariaLabel: spec.label,
         fetch: (comp, callback) => {
-          const items = fetchItems(comp, spec.name, spec.items, Representing.getValue(comp));
+          const items = fetchItems(comp, spec.name, spec.items, Representing.getValue(comp), hasNestedItems);
           callback(
             NestedMenus.build(
               items,

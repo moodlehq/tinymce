@@ -1,7 +1,7 @@
-import { ApproxStructure, Assertions, StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
+import { ApproxStructure, Assertions, FocusTools, Keys, StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
 import { context, describe, it } from '@ephox/bedrock-client';
 import { Arr, Fun } from '@ephox/katamari';
-import { Attribute, Css, Html, SugarBody } from '@ephox/sugar';
+import { Attribute, Css, Html, Scroll, SugarBody, SugarShadowDom } from '@ephox/sugar';
 import { TinyApis, TinyAssertions, TinyDom, TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
@@ -75,7 +75,7 @@ describe('browser.tinymce.themes.silver.view.ViewTest', () => {
       }
     }, []);
 
-    const clickViewButton = (editor: Editor, tooltip: string) => TinyUiActions.clickOnUi(editor, `.tox-view button[title='${tooltip}']`);
+    const clickViewButton = (editor: Editor, tooltip: string) => TinyUiActions.clickOnUi(editor, `.tox-view button[aria-label='${tooltip}']`);
 
     const toggleView = (name: string) => {
       const editor = hook.editor();
@@ -130,7 +130,6 @@ describe('browser.tinymce.themes.silver.view.ViewTest', () => {
           s.element('button', {
             classes: Arr.map(classes, (cls) => arr.has(cls)),
             attrs: {
-              'title': str.is(title),
               'type': str.is('button'),
               'tabindex': str.is('-1'),
               'data-alloy-tabstop': str.is('true')
@@ -318,6 +317,58 @@ describe('browser.tinymce.themes.silver.view.ViewTest', () => {
       toggleView('myview1');
       TinyAssertions.assertCursor(editor, [ 0, 0 ], 1);
     });
+
+    it('TINY-9671: should be possible to navigate the header via keyboard', async () => {
+      const editor = hook.editor();
+      const root = SugarShadowDom.getRootNode(TinyDom.targetElement(editor));
+      toggleView('myview1');
+      FocusTools.setFocus(root, '.tox-view__header');
+      await FocusTools.pTryOnSelector('Focus should be on the view header', root, '.tox-view__header');
+
+      TinyUiActions.keystroke(editor, Keys.enter());
+      await FocusTools.pTryOnSelector('Button 1 should be the first selection', root, '.tox-view__header [aria-label="Button 1"]');
+
+      TinyUiActions.keystroke(editor, Keys.right());
+      await FocusTools.pTryOnSelector('With right it should pass from Button 1 to Button 2', root, '.tox-view__header [aria-label="Button 2"]');
+
+      TinyUiActions.keystroke(editor, Keys.right());
+      await FocusTools.pTryOnSelector('Pressing right again it should move to Button 1', root, '.tox-view__header [aria-label="Button 1"]');
+
+      TinyUiActions.keystroke(editor, Keys.left());
+      await FocusTools.pTryOnSelector('With left it should pass from Button 1 to Button 2', root, '.tox-view__header [aria-label="Button 2"]');
+
+      TinyUiActions.keystroke(editor, Keys.left());
+      await FocusTools.pTryOnSelector('Pressing left again it should move to Button 1', root, '.tox-view__header [aria-label="Button 1"]');
+      toggleView('myview1');
+    });
+
+    it('TINY-10780: should be possible to use "tab" navigation inside the views', async () => {
+      const editor = hook.editor();
+      const root = SugarShadowDom.getRootNode(TinyDom.targetElement(editor));
+      toggleView('myview1');
+      FocusTools.setFocus(root, '.tox-view__pane');
+      await FocusTools.pTryOnSelector('Focus should be on the pane', root, '.tox-view__pane');
+
+      TinyUiActions.keystroke(editor, Keys.tab());
+      await FocusTools.pTryOnSelector('After the first tab Button 1 should be selected', root, '.tox-view__header [aria-label="Button 1"]');
+
+      TinyUiActions.keystroke(editor, Keys.tab());
+      await FocusTools.pTryOnSelector('After the second tab Button 2 should be selected', root, '.tox-view__header [aria-label="Button 2"]');
+
+      TinyUiActions.keystroke(editor, Keys.tab());
+      await FocusTools.pTryOnSelector('After the third tab pane should be selected again', root, '.tox-view__pane');
+
+      TinyUiActions.keystroke(editor, Keys.tab(), { shift: true, shiftKey: true });
+      await FocusTools.pTryOnSelector('After shift+tab from pane Button 2 should be selected', root, '.tox-view__header [aria-label="Button 2"]');
+
+      TinyUiActions.keystroke(editor, Keys.tab(), { shift: true, shiftKey: true });
+      await FocusTools.pTryOnSelector('After the second shift+tab Button 1 should be selected', root, '.tox-view__header [aria-label="Button 1"]');
+
+      TinyUiActions.keystroke(editor, Keys.tab(), { shift: true, shiftKey: true });
+      await FocusTools.pTryOnSelector('After the third shift+tab pane should be selected', root, '.tox-view__pane');
+
+      toggleView('myview1');
+    });
   });
 
   context('Inline mode', () => {
@@ -345,6 +396,137 @@ describe('browser.tinymce.themes.silver.view.ViewTest', () => {
       assert.equal(editor.queryCommandValue('ToggleView'), '', 'Should be empty string if no view is toggled on');
       editor.execCommand('ToggleView', false, 'myview1');
       assert.equal(editor.queryCommandValue('ToggleView'), '', 'Should still be empty since inline mode does not support views');
+    });
+  });
+
+  context('Sliding toolbar', () => {
+    const hook = TinyHooks.bddSetup<Editor>({
+      base_url: '/project/tinymce/js/tinymce',
+      toolbar_mode: 'sliding',
+      toolbar: Arr.range(10, Fun.constant('bold | italic ')).join(''),
+      width: 500,
+      setup: (editor: Editor) => {
+        editor.ui.registry.addView('myview1', {
+          buttons: [
+            {
+              type: 'button',
+              text: 'Button 1',
+              onAction: Fun.noop
+            },
+            {
+              type: 'button',
+              text: 'Button 2',
+              onAction: Fun.noop,
+              buttonType: 'primary'
+            }
+          ],
+          onShow: (api) => {
+            api.getContainer().innerHTML = '<button>myview1</button>';
+          },
+          onHide: Fun.noop
+        });
+      }
+    }, []);
+
+    const assertMainViewVisible = () => {
+      const editor = hook.editor();
+      const editorContainer = UiFinder.findIn(TinyDom.container(editor), '.tox-editor-container').getOrDie();
+
+      assert.isFalse(Attribute.has(editorContainer, 'aria-hidden'), 'Should not have aria-hidden');
+      assert.isTrue(Css.getRaw(editorContainer, 'display').isNone(), 'Should not have display none');
+    };
+
+    const assertViewHtml = (viewIndex: number, expectedHtml: string) => {
+      const editor = hook.editor();
+      const editorContainer = UiFinder.findIn<HTMLElement>(TinyDom.container(editor), `.tox-view:nth-child(${viewIndex + 1}) .tox-view__pane`).getOrDie();
+
+      assert.equal(Html.get(editorContainer), expectedHtml);
+    };
+
+    it('TINY-9419: "Reveal or hide additional toolbar items" button should not be removed if the toolbar is opened and view is opened and close', () => {
+      const editor = hook.editor();
+
+      editor.setContent('<p>ab</p>');
+      TinyUiActions.clickOnToolbar(editor, '[data-mce-name="overflow-button"]');
+
+      editor.execCommand('ToggleView', false, 'myview1');
+      assertViewHtml(0, '<button>myview1</button>');
+      editor.execCommand('ToggleView', false, 'myview1');
+      assertMainViewVisible();
+      const moreButton = UiFinder.findIn(TinyDom.container(editor), '[data-mce-name="overflow-button"]');
+      assert.isTrue(moreButton.isValue(), 'Reveal or hide additional toolbar items button should be there');
+    });
+  });
+
+  context('Sticky toolbar', () => {
+    const hook = TinyHooks.bddSetupLight<Editor>({
+      base_url: '/project/tinymce/js/tinymce',
+      toolbar: Arr.range(10, Fun.constant('bold | italic ')).join(''),
+      width: 500,
+      toolbar_mode: 'sliding',
+      plugins: 'autoresize',
+      toolbar_sticky: true,
+      toolbar_sticky_offset: 1,
+      setup: (editor: Editor) => {
+        editor.ui.registry.addView('myview1', {
+          buttons: [
+            {
+              type: 'button',
+              text: 'Button 1',
+              onAction: () => {
+                editor.execCommand('ToggleView', false, 'myview1');
+              }
+            }
+          ],
+          onShow: (api) => {
+            api.getContainer().innerHTML = '<button>myview1</button>';
+          },
+          onHide: Fun.noop
+        });
+      }
+    }, []);
+
+    const assertMainViewVisible = () => {
+      const editor = hook.editor();
+      const editorContainer = UiFinder.findIn(TinyDom.container(editor), '.tox-editor-container').getOrDie();
+
+      assert.isFalse(Attribute.has(editorContainer, 'aria-hidden'), 'Should not have aria-hidden');
+      assert.isTrue(Css.getRaw(editorContainer, 'display').isNone(), 'Should not have display none');
+    };
+
+    const assertViewHtml = (viewIndex: number, expectedHtml: string) => {
+      const editor = hook.editor();
+      const editorContainer = UiFinder.findIn<HTMLElement>(TinyDom.container(editor), `.tox-view:nth-child(${viewIndex + 1}) .tox-view__pane`).getOrDie();
+
+      assert.equal(Html.get(editorContainer), expectedHtml);
+    };
+
+    it('TINY-9814: coming back from a view when the toolbar is scrolled, should preserve the buttons in `tox-toolbar__primary`', async () => {
+      const editor = hook.editor();
+      editor.setContent(`<p>
+        ${Arr.range(50, Fun.constant('some text')).join('<br>')}
+        <div class="element_to_scroll_to">element to scroll to</div>
+        ${Arr.range(50, Fun.constant('some text')).join('<br>')}
+      </p>`);
+
+      const elementToScrollTo = UiFinder.findIn(TinyDom.body(editor), '.element_to_scroll_to').getOrDie();
+      const toolbar = await TinyUiActions.pWaitForUi(editor, '.tox-toolbar__overflow');
+
+      await Waiter.pTryUntil('Wait for scroll top to be before the toolbar', () => Scroll.get().top < toolbar.dom.getBoundingClientRect().top);
+      elementToScrollTo.dom.scrollIntoView();
+      await Waiter.pTryUntil('Wait for scroll top to be after the toolbar', () => Scroll.get().top > toolbar.dom.getBoundingClientRect().top);
+
+      editor.execCommand('ToggleView', true, 'myview1');
+      assertViewHtml(0, '<button>myview1</button>');
+
+      // this is needed because otherwise the bug is not reproduced
+      await Waiter.pWait(0);
+
+      editor.execCommand('ToggleView', false, 'myview1');
+      assertMainViewVisible();
+
+      const boldButton = await TinyUiActions.pWaitForUi(editor, '.tox-toolbar__primary [data-mce-name="bold"]');
+      assert.isDefined(boldButton, 'Bold button should be in `tox-toolbar__primary`');
     });
   });
 });

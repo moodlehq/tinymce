@@ -1,9 +1,11 @@
 import {
-  AddEventsBehaviour, AlloyComponent, AlloyEvents, Behaviour, Composing, Keying, Memento, RawDomSchema, SimulatedEvent, Sketcher, Slider
+  AddEventsBehaviour, AlloyComponent, AlloyEvents, Behaviour, Composing, Keying, Memento, RawDomSchema,
+  SimulatedEvent, Sketcher, Slider
 } from '@ephox/alloy';
 import { FieldSchema } from '@ephox/boulder';
 import { Arr, Cell, Fun } from '@ephox/katamari';
 
+import { Untranslated } from '../alien/I18n';
 import { Hex } from '../api/colour/ColourTypes';
 import * as HsvColour from '../api/colour/HsvColour';
 import * as RgbaColour from '../api/colour/RgbaColour';
@@ -29,11 +31,13 @@ export interface ColourPickerSketcher extends Sketcher.SingleSketch<ColourPicker
 }
 
 const makeFactory = (
-  translate: (key: string) => string,
-  getClass: (key: string) => string
+  translate: (key: Untranslated) => string,
+  getClass: (key: string) => string,
+  tooltipConfig: RgbForm.RGBTooltipGetConfig,
+  makeIcon: RgbForm.RgbIconCreation
 ): ColourPickerSketcher => {
   const factory = (detail: ColourPickerDetail) => {
-    const rgbForm = RgbForm.rgbFormFactory(translate, getClass, detail.onValidHex, detail.onInvalidHex);
+    const rgbForm = RgbForm.rgbFormFactory(translate, getClass, detail.onValidHex, detail.onInvalidHex, tooltipConfig, makeIcon);
     const sbPalette = SaturationBrightnessPalette.paletteFactory(translate, getClass);
 
     const hueSliderToDegrees = (hue: number): number => (100 - hue) / 100 * 360;

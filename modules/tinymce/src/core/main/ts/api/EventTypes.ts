@@ -144,6 +144,10 @@ export interface PastePostProcessEvent {
   readonly internal: boolean;
 }
 
+export interface EditableRootStateChangeEvent {
+  state: boolean;
+}
+
 export interface NewTableRowEvent {
   node: HTMLTableRowElement;
 }
@@ -176,6 +180,8 @@ export interface EditorEventMap extends Omit<NativeEventMap, 'blur' | 'focus'> {
   'blur': { focusedEditor: Editor | null };
   'resize': UIEvent;
   'scroll': UIEvent;
+  'input': InputEvent;
+  'beforeinput': InputEvent;
   'detach': { };
   'remove': { };
   'init': { };

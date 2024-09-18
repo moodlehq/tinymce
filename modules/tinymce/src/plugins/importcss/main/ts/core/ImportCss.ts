@@ -45,7 +45,8 @@ const isSkinContentCss = (editor: Editor, href: string): boolean => {
     const skinUrlBase = Options.getSkinUrl(editor);
     const skinUrl = skinUrlBase ? editor.documentBaseURI.toAbsolute(skinUrlBase) : EditorManager.baseURL + '/skins/ui/' + skin;
     const contentSkinUrlPart = EditorManager.baseURL + '/skins/content/';
-    return href === skinUrl + '/content' + (editor.inline ? '.inline' : '') + '.min.css' || href.indexOf(contentSkinUrlPart) !== -1;
+    const suffix = editor.editorManager.suffix;
+    return href === skinUrl + '/content' + (editor.inline ? '.inline' : '') + `${suffix}.css` || href.indexOf(contentSkinUrlPart) !== -1;
   }
 
   return false;
@@ -95,7 +96,7 @@ const getSelectors = (editor: Editor, doc: Document, fileFilter: Filter | undefi
     }
 
     Tools.each(rules, (cssRule) => {
-      if (isCssImportRule(cssRule)) {
+      if (isCssImportRule(cssRule) && cssRule.styleSheet) {
         append(cssRule.styleSheet, true);
       } else if (isCssPageRule(cssRule)) {
         Tools.each(cssRule.selectorText.split(','), (selector) => {

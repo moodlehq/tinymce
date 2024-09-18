@@ -25,17 +25,17 @@ const pOpenMenuWithSelector = async (label: string, selector: string): Promise<v
 };
 
 const pOpenMore = async (type: ToolbarMode): Promise<void> => {
-  Mouse.clickOn(SugarBody.body(), 'button[title="More..."]');
+  Mouse.clickOn(SugarBody.body(), 'button[data-mce-name="overflow-button"]');
   await UiFinder.pWaitForVisible('Waiting for more drawer to open', SugarBody.body(), getToolbarSelector(type, true));
 };
 
 const pCloseMore = async (type: ToolbarMode): Promise<void> => {
-  Mouse.clickOn(SugarBody.body(), 'button[title="More..."]');
+  Mouse.clickOn(SugarBody.body(), 'button[data-mce-name="overflow-button"]');
   await Waiter.pTryUntil('Waiting for more drawer to close', () => UiFinder.notExists(SugarBody.body(), getToolbarSelector(type, false)));
 };
 
 const pOpenAlignMenu = (label: string): Promise<void> => {
-  const selector = 'button[aria-label="Align"]';
+  const selector = 'button[aria-label^="Align"].tox-tbtn--select';
   return pOpenMenuWithSelector(label, selector);
 };
 

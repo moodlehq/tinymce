@@ -1,5 +1,5 @@
-import { Arr, Obj, Optional, Optionals, Type } from '@ephox/katamari';
-import { Css, PredicateFilter, SugarElement, SugarNode } from '@ephox/sugar';
+import { Arr, Optional, Type } from '@ephox/katamari';
+import { ContentEditable, Insert, PredicateFilter, SugarElement, SugarNode, Traverse } from '@ephox/sugar';
 
 import DOMUtils from '../api/dom/DOMUtils';
 import DomTreeWalker from '../api/dom/TreeWalker';
@@ -8,13 +8,15 @@ import { SchemaMap } from '../api/html/Schema';
 import * as Options from '../api/Options';
 import { EditorEvent } from '../api/util/EventDispatcher';
 import Tools from '../api/util/Tools';
-import * as Bookmarks from '../bookmark/Bookmarks';
+import { findPreviousBr, isAfterBr } from '../caret/CaretBr';
 import * as CaretContainer from '../caret/CaretContainer';
+import CaretPosition from '../caret/CaretPosition';
+import { isAfterTable } from '../caret/CaretPositionPredicates';
 import * as NodeType from '../dom/NodeType';
-import { isCaretNode } from '../fmt/FormatContainer';
 import * as NormalizeRange from '../selection/NormalizeRange';
 import { isWhitespaceText } from '../text/Whitespace';
 import * as Zwsp from '../text/Zwsp';
+import * as InsertDetailsNewLine from './InsertDetailsNewLine';
 import * as InsertLi from './InsertLi';
 import * as NewLineUtils from './NewLineUtils';
 
@@ -32,10 +34,6 @@ const isWithinNonEditableList = (editor: Editor, node: Node): boolean => {
 
 const isEmptyAnchor = (dom: DOMUtils, elm: Node): boolean => {
   return elm && elm.nodeName === 'A' && dom.isEmpty(elm);
-};
-
-const emptyBlock = (elm: Element) => {
-  elm.innerHTML = '<br data-mce-bogus="1">';
 };
 
 const containerAndSiblingName = (container: Node, nodeName: string) => {
@@ -113,42 +111,6 @@ const trimLeadingLineBreaks = (node: Node) => {
   } while (currentNode);
 };
 
-const applyAttributes = (editor: Editor, node: Element, forcedRootBlockAttrs: Record<string, string>) => {
-  const dom = editor.dom;
-
-  // Merge and apply style attribute
-  Optional.from(forcedRootBlockAttrs.style)
-    .map(dom.parseStyle)
-    .each((attrStyles) => {
-      const currentStyles = Css.getAllRaw(SugarElement.fromDom(node));
-      const newStyles = { ...currentStyles, ...attrStyles };
-      dom.setStyles(node, newStyles);
-    });
-
-  // Merge and apply class attribute
-  const attrClassesOpt = Optional.from(forcedRootBlockAttrs.class).map((attrClasses) => attrClasses.split(/\s+/));
-  const currentClassesOpt = Optional.from(node.className).map((currentClasses) => Arr.filter(currentClasses.split(/\s+/), (clazz) => clazz !== ''));
-  Optionals.lift2(attrClassesOpt, currentClassesOpt, (attrClasses, currentClasses) => {
-    const filteredClasses = Arr.filter(currentClasses, (clazz) => !Arr.contains(attrClasses, clazz));
-    const newClasses = [ ...attrClasses, ...filteredClasses ];
-    dom.setAttrib(node, 'class', newClasses.join(' '));
-  });
-
-  // Apply any remaining forced root block attributes
-  const appliedAttrs = [ 'style', 'class' ];
-  const remainingAttrs = Obj.filter(forcedRootBlockAttrs, (_, attrs) => !Arr.contains(appliedAttrs, attrs));
-  dom.setAttribs(node, remainingAttrs);
-};
-
-const setForcedBlockAttrs = (editor: Editor, node: Element) => {
-  const forcedRootBlockName = Options.getForcedRootBlock(editor);
-
-  if (forcedRootBlockName.toLowerCase() === node.tagName.toLowerCase()) {
-    const forcedRootBlockAttrs = Options.getForcedRootBlockAttrs(editor);
-    applyAttributes(editor, node, forcedRootBlockAttrs);
-  }
-};
-
 // Wraps any text nodes or inline elements in the specified forced root block name
 const wrapSelfAndSiblingsInDefaultBlock = (editor: Editor, newBlockName: string, rng: Range, container: Node, offset: number) => {
   const dom = editor.dom;
@@ -161,7 +123,7 @@ const wrapSelfAndSiblingsInDefaultBlock = (editor: Editor, newBlockName: string,
 
     if (!parentBlock.hasChildNodes()) {
       const newBlock = dom.create(newBlockName);
-      setForcedBlockAttrs(editor, newBlock);
+      NewLineUtils.setForcedBlockAttrs(editor, newBlock);
       parentBlock.appendChild(newBlock);
       rng.setStart(newBlock, 0);
       rng.setEnd(newBlock, 0);
@@ -186,7 +148,7 @@ const wrapSelfAndSiblingsInDefaultBlock = (editor: Editor, newBlockName: string,
       // This should never be null since we check it above
       const startNodeParent = startNode.parentNode as Node;
       const newBlock = dom.create(newBlockName);
-      setForcedBlockAttrs(editor, newBlock);
+      NewLineUtils.setForcedBlockAttrs(editor, newBlock);
       startNodeParent.insertBefore(newBlock, startNode);
 
       // Start wrapping until we hit a block
@@ -241,52 +203,22 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
   const rng = editor.selection.getRng();
   const newBlockName = Options.getForcedRootBlock(editor);
 
-  // Creates a new block element by cloning the current one or creating a new one if the name is specified
-  // This function will also copy any text formatting from the parent block and add it to the new one
-  const createNewBlock = (name?: string): Element => {
-    let node: Node | null = container;
-    const textInlineElements = schema.getTextInlineElements();
+  const start = SugarElement.fromDom(rng.startContainer);
 
-    let block: Element;
-    if (name || parentBlockName === 'TABLE' || parentBlockName === 'HR') {
-      block = dom.create(name || newBlockName);
-    } else {
-      block = parentBlock.cloneNode(false) as Element;
-    }
+  const child = Traverse.child(start, rng.startOffset);
+  const isCef = child.exists((element) => SugarNode.isHTMLElement(element) && !ContentEditable.isEditable(element));
 
-    let caretNode = block;
+  const collapsedAndCef = rng.collapsed && isCef;
 
-    if (Options.shouldKeepStyles(editor) === false) {
-      dom.setAttrib(block, 'style', null); // wipe out any styles that came over with the block
-      dom.setAttrib(block, 'class', null);
-    } else {
-      // Clone any parent styles
-      do {
-        if (textInlineElements[node.nodeName]) {
-          // Ignore caret or bookmark nodes when cloning
-          if (isCaretNode(node) || Bookmarks.isBookmarkNode(node)) {
-            continue;
-          }
-
-          const clonedNode = node.cloneNode(false) as Element;
-          dom.setAttrib(clonedNode, 'id', ''); // Remove ID since it needs to be document unique
-
-          if (block.hasChildNodes()) {
-            clonedNode.appendChild(block.firstChild as Node);
-            block.appendChild(clonedNode);
-          } else {
-            caretNode = clonedNode;
-            block.appendChild(clonedNode);
-          }
-        }
-      } while ((node = node.parentNode) && node !== editableRoot);
-    }
-
-    setForcedBlockAttrs(editor, block);
-
-    emptyBlock(caretNode);
-
-    return block;
+  const createNewBlock = (name?: string, styles?: Record<string, string>) => {
+    return NewLineUtils.createNewBlock(
+      editor,
+      container,
+      parentBlock,
+      editableRoot,
+      Options.shouldKeepStyles(editor),
+      name,
+      styles);
   };
 
   // Returns true/false if the caret is at the start/end of the parent block element
@@ -299,7 +231,7 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
     }
 
     // If after the last element in block node edge case for #5091
-    if (container.parentNode === parentBlock && isAfterLastNodeInContainer && !start) {
+    if ((container.parentNode === parentBlock || container === parentBlock) && isAfterLastNodeInContainer && !start) {
       return true;
     }
 
@@ -360,7 +292,7 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
     }
 
     // Split the current container block element if enter is pressed inside an empty inner block element
-    if (shouldEndContainer(editor, containerBlock) && canSplitBlock(dom, containerBlock) && dom.isEmpty(parentBlock)) {
+    if (shouldEndContainer(editor, containerBlock) && canSplitBlock(dom, containerBlock) && dom.isEmpty(parentBlock, undefined, { includeZwsp: true })) {
       // Split container block for example a BLOCKQUOTE at the current blockParent location for example a P
       block = dom.split(containerBlock, parentBlock) as Element;
     } else {
@@ -383,7 +315,7 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
   const ctrlKey = !!(evt && evt.ctrlKey);
 
   // Resolve node index
-  if (NodeType.isElement(container) && container.hasChildNodes()) {
+  if (NodeType.isElement(container) && container.hasChildNodes() && !collapsedAndCef) {
     isAfterLastNodeInContainer = offset > container.childNodes.length - 1;
 
     container = container.childNodes[Math.min(offset, container.childNodes.length - 1)] || container;
@@ -425,6 +357,10 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
     parentBlockName = containerBlockName;
   }
 
+  if (NodeType.isElement(containerBlock) && InsertDetailsNewLine.isLastEmptyBlockInDetails(editor, shiftKey, parentBlock)) {
+    return InsertDetailsNewLine.insertNewLine(editor, createNewBlock, parentBlock);
+  }
+
   // Handle enter in list item
   if (/^(LI|DT|DD)$/.test(parentBlockName) && NodeType.isElement(containerBlock)) {
     // Handle enter inside an empty list item
@@ -435,26 +371,50 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
   }
 
   // Never split the body or blocks that we can't split like noneditable host elements
-  if (parentBlock === editor.getBody() || !canSplitBlock(dom, parentBlock)) {
+  if (!collapsedAndCef && (parentBlock === editor.getBody() || !canSplitBlock(dom, parentBlock))) {
     return;
   }
   const parentBlockParent = parentBlock.parentNode;
 
   // Insert new block before/after the parent block depending on caret location
   let newBlock: Element;
-  if (CaretContainer.isCaretContainerBlock(parentBlock)) {
+  if (collapsedAndCef) {
+    newBlock = createNewBlock(newBlockName);
+    child.fold(
+      () => {
+        Insert.append(start, SugarElement.fromDom(newBlock));
+      },
+      (child) => {
+        Insert.before(child, SugarElement.fromDom(newBlock));
+      }
+    );
+    editor.selection.setCursorLocation(newBlock, 0);
+  } else if (CaretContainer.isCaretContainerBlock(parentBlock)) {
+    // TODO: TINY-10384 NOTE: Added logic to make sure pressing enter is consistent between browsers.
+    // As an example a fake caret is used before/after tables on Firefox but not on Chrome. So different behaviour could occur
     newBlock = CaretContainer.showCaretContainerBlock(parentBlock) as Element;
     if (dom.isEmpty(parentBlock)) {
-      emptyBlock(parentBlock);
+      NewLineUtils.emptyBlock(parentBlock);
     }
-    setForcedBlockAttrs(editor, newBlock);
+    NewLineUtils.setForcedBlockAttrs(editor, newBlock);
     NewLineUtils.moveToCaretPosition(editor, newBlock);
   } else if (isCaretAtStartOrEndOfBlock(false)) {
+    // Caret is moved to the new block in the insertNewBlockAfter fn
     newBlock = insertNewBlockAfter();
   } else if (isCaretAtStartOrEndOfBlock(true) && parentBlockParent) {
-    // Insert new block before
+    // Check where caret is positioned before it is potentially moved by 'insertBefore' fn
+    const caretPos = CaretPosition.fromRangeStart(rng);
+    const afterTable = isAfterTable(caretPos);
+    const parentBlockSugar = SugarElement.fromDom(parentBlock);
+    const afterBr = isAfterBr(parentBlockSugar, caretPos, editor.schema);
+    const prevBrOpt = afterBr
+      ? findPreviousBr(parentBlockSugar, caretPos, editor.schema).bind((pos) => Optional.from(pos.getNode()))
+      : Optional.none();
+
     newBlock = parentBlockParent.insertBefore(createNewBlock(), parentBlock);
-    NewLineUtils.moveToCaretPosition(editor, containerAndSiblingName(parentBlock, 'HR') ? newBlock : parentBlock);
+
+    const root = containerAndSiblingName(parentBlock, 'HR') || afterTable ? newBlock : prevBrOpt.getOr(parentBlock);
+    NewLineUtils.moveToCaretPosition(editor, root);
   } else {
     // Extract after fragment and insert it after the current block
     const tmpRng = includeZwspInRange(rng).cloneRange();
@@ -468,7 +428,7 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
     addBrToBlockIfNeeded(dom, parentBlock);
 
     if (dom.isEmpty(parentBlock)) {
-      emptyBlock(parentBlock);
+      NewLineUtils.emptyBlock(parentBlock);
     }
 
     newBlock.normalize();
@@ -478,7 +438,7 @@ const insert = (editor: Editor, evt?: EditorEvent<KeyboardEvent>): void => {
       dom.remove(newBlock);
       insertNewBlockAfter();
     } else {
-      setForcedBlockAttrs(editor, newBlock);
+      NewLineUtils.setForcedBlockAttrs(editor, newBlock);
       NewLineUtils.moveToCaretPosition(editor, newBlock);
     }
   }

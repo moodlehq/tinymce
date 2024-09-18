@@ -83,6 +83,7 @@ export default (): void => {
       { title: 'Some class', value: 'class-name' }
     ],
     importcss_append: true,
+    // init_content_sync: true,
     height: 400,
     image_advtab: true,
     file_picker_callback: (callback, _value, meta) => {
@@ -106,12 +107,6 @@ export default (): void => {
         callback('movie.mp4', { embed: '<p>test</p>' });
       }
     },
-    templates: [
-      { title: 'Some title 1', description: 'Some desc 1', content: 'My content' },
-      { title: 'Some title 2', description: 'Some desc 2', content: '<div class="mceTmpl"><span class="cdate">cdate</span><span class="mdate">mdate</span>My content2</div>' }
-    ],
-    template_cdate_format: '[CDATE: %m/%d/%Y : %H:%M:%S]',
-    template_mdate_format: '[MDATE: %m/%d/%Y : %H:%M:%S]',
     image_caption: true,
     theme: 'silver',
     setup: (ed) => {
@@ -122,12 +117,12 @@ export default (): void => {
     plugins: [
       'autosave', 'advlist', 'autolink', 'link', 'image', 'lists', 'charmap', 'preview', 'anchor', 'pagebreak',
       'searchreplace', 'wordcount', 'visualblocks', 'visualchars', 'code', 'fullscreen', 'insertdatetime', 'media', 'nonbreaking',
-      'save', 'table', 'directionality', 'emoticons', 'template', 'importcss', 'codesample', 'help'
+      'save', 'table', 'directionality', 'emoticons', 'importcss', 'codesample', 'help', 'accordion'
     ],
     // rtl_ui: true,
     add_unload_trigger: false,
     autosave_ask_before_unload: false,
-    toolbar: 'undo redo sidebar1 | bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | align lineheight fontsize fontfamily blocks styles insertfile | styles | ' +
+    toolbar: 'undo redo sidebar1 fontsizeinput | bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | align lineheight fontsize fontfamily blocks styles insertfile | styles | ' +
     'bullist numlist outdent indent | link image | print preview media | forecolor backcolor emoticons table codesample code language | ltr rtl',
     contextmenu: 'link linkchecker image table lists configurepermanentpen',
 

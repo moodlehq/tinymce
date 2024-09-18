@@ -1,7 +1,7 @@
 import { Arr, Optional, Optionals } from '@ephox/katamari';
 import { Attribute, Css, Insert, InsertAll, Replication, SugarElement, SugarNode } from '@ephox/sugar';
 
-import { Entry } from './Entry';
+import { Entry, EntryFragment, EntryList, isEntryComment, isEntryFragment, isEntryList } from './Entry';
 import { ListType } from './Util';
 
 interface Segment {
@@ -32,26 +32,28 @@ const createSegment = (scope: Document, listType: ListType): Segment => {
   return segment;
 };
 
-const createSegments = (scope: Document, entry: Entry, size: number): Segment[] => {
+const createSegments = (scope: Document, entry: EntryList | EntryFragment, size: number): Segment[] => {
   const segments: Segment[] = [];
   for (let i = 0; i < size; i++) {
-    segments.push(createSegment(scope, entry.listType));
+    segments.push(createSegment(scope, isEntryList(entry) ? entry.listType : entry.parentListType));
   }
   return segments;
 };
 
-const populateSegments = (segments: Segment[], entry: Entry): void => {
+const populateSegments = (segments: Segment[], entry: EntryList | EntryFragment): void => {
   for (let i = 0; i < segments.length - 1; i++) {
     Css.set(segments[i].item, 'list-style-type', 'none');
   }
   Arr.last(segments).each((segment) => {
-    Attribute.setAll(segment.list, entry.listAttributes);
-    Attribute.setAll(segment.item, entry.itemAttributes);
+    if (isEntryList(entry)) {
+      Attribute.setAll(segment.list, entry.listAttributes);
+      Attribute.setAll(segment.item, entry.itemAttributes);
+    }
     InsertAll.append(segment.item, entry.content);
   });
 };
 
-const normalizeSegment = (segment: Segment, entry: Entry): void => {
+const normalizeSegment = (segment: Segment, entry: EntryList): void => {
   if (SugarNode.name(segment.list) !== entry.listType) {
     segment.list = Replication.mutate(segment.list, entry.listType);
   }
@@ -74,15 +76,22 @@ const writeShallow = (scope: Document, cast: Segment[], entry: Entry): Segment[]
   const newCast = cast.slice(0, entry.depth);
 
   Arr.last(newCast).each((segment) => {
-    const item = createItem(scope, entry.itemAttributes, entry.content);
-    appendItem(segment, item);
-    normalizeSegment(segment, entry);
+    if (isEntryList(entry)) {
+      const item = createItem(scope, entry.itemAttributes, entry.content);
+      appendItem(segment, item);
+      normalizeSegment(segment, entry);
+    } else if (isEntryFragment(entry)) {
+      InsertAll.append(segment.item, entry.content);
+    } else {
+      const item = SugarElement.fromHtml(`<!--${entry.content}-->`);
+      Insert.append(segment.list, item);
+    }
   });
 
   return newCast;
 };
 
-const writeDeep = (scope: Document, cast: Segment[], entry: Entry): Segment[] => {
+const writeDeep = (scope: Document, cast: Segment[], entry: EntryList | EntryFragment): Segment[] => {
   const segments = createSegments(scope, entry, entry.depth - cast.length);
   joinSegments(segments);
   populateSegments(segments, entry);
@@ -92,9 +101,28 @@ const writeDeep = (scope: Document, cast: Segment[], entry: Entry): Segment[] =>
 };
 
 const composeList = (scope: Document, entries: Entry[]): Optional<SugarElement<HTMLElement>> => {
-  const cast = Arr.foldl(entries, (cast, entry) => {
-    return entry.depth > cast.length ? writeDeep(scope, cast, entry) : writeShallow(scope, cast, entry);
+  let firstCommentEntryOpt: Optional<Entry> = Optional.none();
+
+  const cast = Arr.foldl(entries, (cast, entry, i) => {
+    if (!isEntryComment(entry)) {
+      return entry.depth > cast.length ? writeDeep(scope, cast, entry) : writeShallow(scope, cast, entry);
+    } else {
+      // this is needed becuase if the first element of the list is a comment we would not have the data to create the new list
+      if (i === 0) {
+        firstCommentEntryOpt = Optional.some(entry);
+        return cast;
+      }
+
+      return writeShallow(scope, cast, entry);
+    }
   }, [] as Segment[]);
+
+  firstCommentEntryOpt.each((firstCommentEntry) => {
+    const item = SugarElement.fromHtml(`<!--${firstCommentEntry.content}-->`);
+    Arr.head(cast).each((fistCast) => {
+      Insert.prepend(fistCast.list, item);
+    });
+  });
 
   return Arr.head(cast).map((segment) => segment.list);
 };

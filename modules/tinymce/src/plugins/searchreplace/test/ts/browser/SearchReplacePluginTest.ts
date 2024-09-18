@@ -1,6 +1,6 @@
 import { describe, it } from '@ephox/bedrock-client';
 import { Unicode } from '@ephox/katamari';
-import { TinyAssertions, TinyHooks } from '@ephox/wrap-mcagar';
+import { TinyApis, TinyAssertions, TinyHooks } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
 import Editor from 'tinymce/core/api/Editor';
@@ -55,9 +55,9 @@ describe('browser.tinymce.plugins.searchreplace.SearchReplacePluginTest', () => 
   it('TINY-4522: SearchReplace: Find special characters match, whole words: true', () => {
     const editor = hook.editor();
     editor.setContent('^^ ^^ ^^^^');
-    assert.equal(editor.plugins.searchreplace.find('^^', false, true), 2);
+    assert.equal(editor.plugins.searchreplace.find('^^', false, true), 3);
     editor.setContent('50$ 50$50$');
-    assert.equal(editor.plugins.searchreplace.find('50$', false, true), 1);
+    assert.equal(editor.plugins.searchreplace.find('50$', false, true), 2);
   });
 
   it('TINY-4522: SearchReplace: Find word with punctuation, whole words: true', () => {
@@ -202,7 +202,7 @@ describe('browser.tinymce.plugins.searchreplace.SearchReplacePluginTest', () => 
   it('TINY-4599: SearchReplace: Excludes zwsp characters', () => {
     const content = `<p>a${Unicode.zeroWidth} b${Unicode.zeroWidth} a</p>`;
     const editor = hook.editor();
-    editor.setContent(content, { format: 'raw' });
+    TinyApis(editor).setRawContent(content);
     assert.equal(editor.plugins.searchreplace.find(' '), 2);
     assert.lengthOf(editor.getBody().getElementsByTagName('span'), 2);
     editor.plugins.searchreplace.done();

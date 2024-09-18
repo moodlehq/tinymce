@@ -5,6 +5,7 @@ import DOMUtils from '../api/dom/DOMUtils';
 import Editor from '../api/Editor';
 import { ParserArgs } from '../api/html/DomParser';
 import AstNode from '../api/html/Node';
+import Schema from '../api/html/Schema';
 import HtmlSerializer from '../api/html/Serializer';
 import * as StyleUtils from '../api/html/StyleUtils';
 import Tools from '../api/util/Tools';
@@ -16,10 +17,13 @@ import * as CefUtils from '../dom/CefUtils';
 import ElementUtils from '../dom/ElementUtils';
 import * as NodeType from '../dom/NodeType';
 import * as PaddingBr from '../dom/PaddingBr';
+import * as AstNodeType from '../html/AstNodeType';
 import * as FilterNode from '../html/FilterNode';
 import * as InvalidNodes from '../html/InvalidNodes';
+import * as ParserUtils from '../html/ParserUtils';
 import * as RangeNormalizer from '../selection/RangeNormalizer';
 import * as SelectionUtils from '../selection/SelectionUtils';
+import * as Zwsp from '../text/Zwsp';
 import { InsertContentDetails } from './ContentTypes';
 import * as InsertList from './InsertList';
 
@@ -71,8 +75,8 @@ const validInsertion = (editor: Editor, value: string, parentNode: Element): voi
   }
 };
 
-const trimBrsFromTableCell = (dom: DOMUtils, elm: Element): void => {
-  Optional.from(dom.getParent(elm, 'td,th')).map(SugarElement.fromDom).each(PaddingBr.trimBlockTrailingBr);
+const trimBrsFromTableCell = (dom: DOMUtils, elm: Element, schema: Schema): void => {
+  Optional.from(dom.getParent(elm, 'td,th')).map(SugarElement.fromDom).each((el) => PaddingBr.trimBlockTrailingBr(el, schema));
 };
 
 // Remove children nodes that are exactly the same as a parent node - name, attributes, styles
@@ -84,21 +88,28 @@ const reduceInlineTextElements = (editor: Editor, merge: boolean | undefined): v
     const root = editor.getBody();
     const elementUtils = ElementUtils(editor);
 
-    Tools.each(dom.select('*[data-mce-fragment]'), (node) => {
-      const isInline = Type.isNonNullable(textInlineElements[node.nodeName.toLowerCase()]);
-      if (isInline && StyleUtils.hasInheritableStyles(dom, node)) {
-        for (let parentNode = node.parentElement; Type.isNonNullable(parentNode) && parentNode !== root; parentNode = parentNode.parentElement) {
-          // Check if the parent has a style conflict that would prevent the child node from being safely removed,
-          // even if a exact node match could be found further up the tree
-          const styleConflict = StyleUtils.hasStyleConflict(dom, node, parentNode);
-          if (styleConflict) {
-            break;
-          }
+    const fragmentSelector = '*[data-mce-fragment]';
+    const fragments = dom.select(fragmentSelector);
 
-          if (elementUtils.compare(parentNode, node)) {
-            dom.remove(node, true);
-            break;
-          }
+    Tools.each(fragments, (node) => {
+      const isInline = (currentNode: Element) => Type.isNonNullable(textInlineElements[currentNode.nodeName.toLowerCase()]);
+      const hasOneChild = (currentNode: Element) => currentNode.childNodes.length === 1;
+      const hasNoNonInheritableStyles = (currentNode: Element) => !(StyleUtils.hasNonInheritableStyles(dom, currentNode) || StyleUtils.hasConditionalNonInheritableStyles(dom, currentNode));
+
+      if (hasNoNonInheritableStyles(node) && isInline(node) && hasOneChild(node)) {
+        const styles = StyleUtils.getStyleProps(dom, node);
+        const isOverridden = (oldStyles: string[], newStyles: string[]) => Arr.forall(oldStyles, (style) => Arr.contains(newStyles, style));
+        const overriddenByAllChildren = (childNode: Element): boolean => hasOneChild(node) && dom.is(childNode, fragmentSelector) && isInline(childNode) &&
+          (childNode.nodeName === node.nodeName && isOverridden(styles, StyleUtils.getStyleProps(dom, childNode)) || overriddenByAllChildren(childNode.children[0]));
+
+        const identicalToParent = (parentNode: Element | null): boolean => Type.isNonNullable(parentNode) && parentNode !== root
+          && (elementUtils.compare(node, parentNode) || identicalToParent(parentNode.parentElement));
+
+        const conflictWithInsertedParent = (parentNode: Element | null): boolean => Type.isNonNullable(parentNode) && parentNode !== root
+          && dom.is(parentNode, fragmentSelector) && (StyleUtils.hasStyleConflict(dom, node, parentNode) || conflictWithInsertedParent(parentNode.parentElement));
+
+        if (overriddenByAllChildren(node.children[0]) || (identicalToParent(node.parentElement) && !conflictWithInsertedParent(node.parentElement))) {
+          dom.remove(node, true);
         }
       }
     });
@@ -180,16 +191,19 @@ const moveSelectionToMarker = (editor: Editor, marker: HTMLElement | null): void
   dom.remove(marker);
 
   if (parentBlock && dom.isEmpty(parentBlock)) {
+    const isCell = isTableCell(parentBlock);
+
     Remove.empty(SugarElement.fromDom(parentBlock));
 
     rng.setStart(parentBlock, 0);
     rng.setEnd(parentBlock, 0);
 
-    if (!isTableCell(parentBlock) && !isPartOfFragment(parentBlock) && (nextRng = findNextCaretRng(rng))) {
+    if (!isCell && !isPartOfFragment(parentBlock) && (nextRng = findNextCaretRng(rng))) {
       rng = nextRng;
       dom.remove(parentBlock);
     } else {
-      dom.add(parentBlock, dom.create('br', { 'data-mce-bogus': '1' }));
+      // TINY-9860: If parentBlock is a table cell, add a br without 'data-mce-bogus' attribute.
+      dom.add(parentBlock, dom.create('br', isCell ? {} : { 'data-mce-bogus': '1' }));
     }
   }
 
@@ -215,6 +229,20 @@ const deleteSelectedContent = (editor: Editor): void => {
   }
 };
 
+const findMarkerNode = (scope: AstNode): Optional<AstNode> => {
+  for (let markerNode: AstNode | null | undefined = scope; markerNode; markerNode = markerNode.walk()) {
+    if (markerNode.attr('id') === 'mce_marker') {
+      return Optional.some(markerNode);
+    }
+  }
+
+  return Optional.none();
+};
+
+const notHeadingsInSummary = (dom: DOMUtils, node: Element, fragment: AstNode) => {
+  return Arr.exists(fragment.children(), AstNodeType.isHeading) && dom.getParent(node, dom.isBlock)?.nodeName === 'SUMMARY';
+};
+
 export const insertHtmlAtCaret = (editor: Editor, value: string, details: InsertContentDetails): string => {
   const selection = editor.selection;
   const dom = editor.dom;
@@ -227,6 +255,11 @@ export const insertHtmlAtCaret = (editor: Editor, value: string, details: Insert
     validate: true
   }, editor.schema);
   const bookmarkHtml = '<span id="mce_marker" data-mce-type="bookmark">&#xFEFF;</span>';
+
+  // TINY-10305: Remove all user-input zwsp to avoid impacting caret removal from content.
+  if (!details.preserve_zwsp) {
+    value = Zwsp.trim(value);
+  }
 
   // Add caret at end of contents if it's missing
   if (value.indexOf('{$caret}') === -1) {
@@ -293,7 +326,7 @@ export const insertHtmlAtCaret = (editor: Editor, value: string, details: Insert
   editor._selectionOverrides.showBlockCaretContainer(parentNode);
 
   // If parser says valid we can insert the contents into that parent
-  if (!parserArgs.invalid) {
+  if (!parserArgs.invalid && !notHeadingsInSummary(dom, parentNode, fragment)) {
     value = serializer.serialize(fragment);
     validInsertion(editor, value, parentNode);
   } else {
@@ -322,17 +355,15 @@ export const insertHtmlAtCaret = (editor: Editor, value: string, details: Insert
     // Get the outer/inner HTML depending on if we are in the root and parser and serialize that
     value = parentNode === rootNode ? rootNode.innerHTML : dom.getOuterHTML(parentNode);
     const root = parser.parse(value);
-    for (let markerNode: AstNode | null | undefined = root; markerNode; markerNode = markerNode.walk()) {
-      if (markerNode.attr('id') === 'mce_marker') {
-        markerNode.replace(fragment);
-        break;
-      }
-    }
+    const markerNode = findMarkerNode(root);
+    const editingHost = markerNode.bind(ParserUtils.findClosestEditingHost).getOr(root);
+    markerNode.each((marker) => marker.replace(fragment));
+
     const toExtract = fragment.children();
     const parent = fragment.parent ?? root;
     fragment.unwrap();
     const invalidChildren = Arr.filter(toExtract, (node) => InvalidNodes.isInvalid(editor.schema, node, parent));
-    InvalidNodes.cleanInvalidNodes(invalidChildren, editor.schema);
+    InvalidNodes.cleanInvalidNodes(invalidChildren, editor.schema, editingHost);
     FilterNode.filter(parser.getNodeFilters(), parser.getAttributeFilters(), root);
     value = serializer.serialize(root);
 
@@ -347,7 +378,7 @@ export const insertHtmlAtCaret = (editor: Editor, value: string, details: Insert
   reduceInlineTextElements(editor, merge);
   moveSelectionToMarker(editor, dom.get('mce_marker'));
   unmarkFragmentElements(editor.getBody());
-  trimBrsFromTableCell(dom, selection.getStart());
+  trimBrsFromTableCell(dom, selection.getStart(), editor.schema);
   TransparentElements.updateCaret(editor.schema, editor.getBody(), selection.getStart());
 
   return value;

@@ -1,13 +1,11 @@
-import { afterEach, describe, it } from '@ephox/bedrock-client';
-import { Arr } from '@ephox/katamari';
-import { TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
+import { afterEach, before, context, describe, it } from '@ephox/bedrock-client';
+import { Arr, Fun } from '@ephox/katamari';
+import { TinyAssertions, TinyHooks, TinySelections, TinyState } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
 import Editor from 'tinymce/core/api/Editor';
 import { TableModifiedEvent } from 'tinymce/core/api/EventTypes';
 import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
-
-import * as TableTestUtils from '../../../module/table/TableTestUtils';
 
 describe('browser.tinymce.models.dom.table.command.TableDeleteRowTest', () => {
   let events: Array<EditorEvent<TableModifiedEvent>> = [];
@@ -65,7 +63,7 @@ describe('browser.tinymce.models.dom.table.command.TableDeleteRowTest', () => {
   });
 
   it('TINY-9459: Should not apply mceTableDeleteRow command on table in noneditable root', () => {
-    TableTestUtils.withNoneditableRootEditor(hook.editor(), (editor) => {
+    TinyState.withNoneditableRootEditor(hook.editor(), (editor) => {
       const initalContent = '<table><tbody><tr><td>cell</td></tr></tbody></table>';
       editor.setContent(initalContent);
       TinySelections.setCursor(editor, [ 0, 0, 0, 0, 0 ], 0);
@@ -81,5 +79,74 @@ describe('browser.tinymce.models.dom.table.command.TableDeleteRowTest', () => {
     TinySelections.setCursor(editor, [ 1, 0, 0, 0, 0 ], 0); // Index off by one due to cef fake caret
     editor.execCommand('mceTableDeleteRow');
     TinyAssertions.assertContent(editor, initalContent);
+  });
+
+  /** Create `rows` number of `tr` elements, with `cols` number of `td` elements inside each.  */
+  const tr = (rows: number, cols: number): string[] =>
+    Arr.range(rows, (r) => '<tr>' + Arr.range(cols, (c) => `<td>${r}-${c}</td>`).join('') + '</tr>');
+  const textOffset = (row: number, col: number) => `${row}-${col}`.length;
+
+  Arr.each([
+    {
+      rows: 4,
+      cols: 3,
+      options: {}
+    },
+    {
+      rows: 4,
+      cols: 3,
+      options: { colgroup: true }
+    },
+    {
+      rows: 20,
+      cols: 20,
+      options: {}
+    },
+    {
+      rows: 20,
+      cols: 20,
+      options: { colgroup: true }
+    }
+  ], ({ rows, cols, options }) => {
+    context(`${rows}x${cols} ${options.colgroup ? 'with colgroup' : ''}`, () => {
+      const createTable = (tbody: string) => {
+        const colgroup = options.colgroup ? `<colgroup>${Arr.range(cols, Fun.constant('<col>')).join('')}</colgroup>` : '';
+        return `<table>${colgroup}<tbody>${tbody}</tbody></table>`;
+      };
+      const originalTBody = tr(rows, cols);
+      const lastRowIndex = rows - 1;
+      const pathToBody = [ 0, options.colgroup ? 1 : 0 ];
+
+      before(() => {
+        const editor = hook.editor();
+        editor.setContent(createTable(originalTBody.join('')));
+      });
+
+      it('TINY-6309: Should place cursor in adjacent cell when deleting the last row', () => {
+        const editor = hook.editor();
+        TinySelections.setCursor(editor, [ ...pathToBody, lastRowIndex, 1, 0 ], 0);
+        editor.execCommand('mceTableDeleteRow');
+        TinyAssertions.assertCursor(editor, [ ...pathToBody, lastRowIndex - 1, 1, 0 ], textOffset(1, lastRowIndex - 1));
+        TinyAssertions.assertContent(
+          editor,
+          createTable(originalTBody.slice(0, -1).join(''))
+        );
+
+        assertEvents(1);
+      });
+
+      it('TINY-6309: Should place cursor in adjacent cell when deleting the first row', () => {
+        const editor = hook.editor();
+        TinySelections.setCursor(editor, [ ...pathToBody, 0, 0, 0 ], 0);
+        editor.execCommand('mceTableDeleteRow');
+        TinyAssertions.assertCursor(editor, [ ...pathToBody, 0, 0, 0 ], textOffset(0, 0));
+        TinyAssertions.assertContent(
+          editor,
+          createTable(originalTBody.slice(1, -1).join(''))
+        );
+
+        assertEvents(1);
+      });
+    });
   });
 });

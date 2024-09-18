@@ -44,8 +44,8 @@ const open = (editor: Editor, currentSearchState: Cell<Actions.SearchState>): vo
     Arr.each(buttons, toggle);
   };
 
-  const notFoundAlert = (api: Dialog.DialogInstanceApi<DialogData>): void => {
-    api.redial(getDialogSpec(true, api.getData()));
+  const toggleNotFoundAlert = (isVisible: boolean, api: Dialog.DialogInstanceApi<DialogData>): void => {
+    api.redial(getDialogSpec(isVisible, api.getData()));
   };
 
   // Temporarily workaround for iOS/iPadOS dialog placement to hide the keyboard
@@ -81,7 +81,7 @@ const open = (editor: Editor, currentSearchState: Cell<Actions.SearchState>): vo
       // Find new matches
       const count = Actions.find(editor, currentSearchState, data.findtext, data.matchcase, data.wholewords, data.inselection);
       if (count <= 0) {
-        notFoundAlert(api);
+        toggleNotFoundAlert(true, api);
       }
       disableAll(api, count === 0);
     }
@@ -102,37 +102,43 @@ const open = (editor: Editor, currentSearchState: Cell<Actions.SearchState>): vo
   const getPanelItems = (error: boolean): Dialog.BodyComponentSpec[] => {
     const items: Dialog.BodyComponentSpec[] = [
       {
-        type: 'bar',
+        type: 'label',
+        label: 'Find',
+        for: 'findtext',
         items: [
           {
-            type: 'input',
-            name: 'findtext',
-            placeholder: 'Find',
-            maximized: true,
-            inputMode: 'search'
-          },
-          {
-            type: 'button',
-            name: 'prev',
-            text: 'Previous',
-            icon: 'action-prev',
-            enabled: false,
-            borderless: true
-          },
-          {
-            type: 'button',
-            name: 'next',
-            text: 'Next',
-            icon: 'action-next',
-            enabled: false,
-            borderless: true
+            type: 'bar',
+            items: [
+              {
+                type: 'input',
+                name: 'findtext',
+                maximized: true,
+                inputMode: 'search'
+              },
+              {
+                type: 'button',
+                name: 'prev',
+                text: 'Previous',
+                icon: 'action-prev',
+                enabled: false,
+                borderless: true
+              },
+              {
+                type: 'button',
+                name: 'next',
+                text: 'Next',
+                icon: 'action-next',
+                enabled: false,
+                borderless: true
+              }
+            ]
           }
         ]
       },
       {
         type: 'input',
         name: 'replacetext',
-        placeholder: 'Replace with',
+        label: 'Replace with',
         inputMode: 'search'
       },
     ];
@@ -200,7 +206,7 @@ const open = (editor: Editor, currentSearchState: Cell<Actions.SearchState>): vo
     initialData,
     onChange: (api, details) => {
       if (showNoMatchesAlertBanner) {
-        api.redial(getDialogSpec(false, api.getData()));
+        toggleNotFoundAlert(false, api);
       }
       if (details.name === 'findtext' && currentSearchState.get().count > 0) {
         reset(api);
@@ -234,6 +240,7 @@ const open = (editor: Editor, currentSearchState: Cell<Actions.SearchState>): vo
         case 'matchcase':
         case 'wholewords':
         case 'inselection':
+          toggleNotFoundAlert(false, api);
           updateSearchState(api);
           reset(api);
           break;

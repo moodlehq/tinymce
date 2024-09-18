@@ -1,9 +1,9 @@
-import { UiFinder, Waiter } from '@ephox/agar';
+import { Keys, UiFinder, Waiter } from '@ephox/agar';
 import { beforeEach, context, describe, it } from '@ephox/bedrock-client';
 import { Arr, Optional } from '@ephox/katamari';
 import { PlatformDetection } from '@ephox/sand';
-import { Attribute } from '@ephox/sugar';
-import { McEditor, TinyAssertions, TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
+import { Attribute, SugarBody } from '@ephox/sugar';
+import { McEditor, TinyAssertions, TinyHooks, TinySelections, TinyState, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
 import Editor from 'tinymce/core/api/Editor';
@@ -21,10 +21,10 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
   const toolbarSpec: ToolbarOrMenuSpec = {
     name: 'Toolbar',
     pOpen: async (editor, title) => {
-      TinyUiActions.clickOnToolbar(editor, `[title="${title}"]`);
+      TinyUiActions.clickOnToolbar(editor, `[aria-label="${title}"]`);
       await TinyUiActions.pWaitForUi(editor, '[role="menu"]');
     },
-    close: (editor, title) => TinyUiActions.clickOnToolbar(editor, `[title="${title}"]`),
+    close: (editor, title) => TinyUiActions.clickOnToolbar(editor, `[aria-label="${title}"]`),
     menuSelector: '[role="menu"]'
   };
 
@@ -34,7 +34,7 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
     pOpen: async (editor, title) => {
       TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
       await TinyUiActions.pWaitForUi(editor, '[role="menu"]');
-      TinyUiActions.clickOnUi(editor, `[role="menu"] [title="${title}"]`);
+      TinyUiActions.clickOnUi(editor, `[role="menu"] [aria-label="${title}"]`);
     },
     close: (editor) => TinyUiActions.clickOnMenu(editor, 'button:contains("Format")'),
     menuSelector: '[role="menu"]~[role="menu"]' // the line-height submenu is always the *second* menu in the sink
@@ -42,7 +42,7 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
 
   const pSelectItem = async (editor: Editor, selector: string, value: string) => {
     await TinyUiActions.pWaitForUi(editor, selector);
-    TinyUiActions.clickOnUi(editor, `[role="menuitemcheckbox"][title="${value}"]`);
+    TinyUiActions.clickOnUi(editor, `[role="menuitemcheckbox"][aria-label="${value}"]`);
   };
 
   const pAssertOptions = async (editor: Editor, selector: string, ideal: string[], current: Optional<string>) => {
@@ -52,11 +52,11 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
     // ensure that the checked option (if it exists) lines up with what we expect
     current.fold(
       () => UiFinder.notExists(menu, '[aria-checked="true"]'),
-      (current) => UiFinder.exists(menu, `[aria-checked="true"][title="${current}"]`)
+      (current) => UiFinder.exists(menu, `[aria-checked="true"][aria-label="${current}"]`)
     );
     // ensure that the list of options is correct
     const elements = UiFinder.findAllIn(menu, '[role="menuitemcheckbox"]');
-    const actual = Arr.map(elements, (element) => Attribute.get(element, 'title'));
+    const actual = Arr.map(elements, (element) => Attribute.get(element, 'aria-label'));
     assert.deepEqual(actual, ideal, 'Correct menu items are displayed');
   };
 
@@ -135,14 +135,38 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
         TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
         await TinyUiActions.pWaitForUi(editor, '[role="menu"]');
         // Open line height
-        TinyUiActions.clickOnUi(editor, `[role="menu"] [title="Line height"]`);
+        TinyUiActions.clickOnUi(editor, `[role="menu"] [aria-label="Line height"]`);
         // Close line height
-        TinyUiActions.clickOnUi(editor, `[role="menu"] [title="Align"]`);
+        TinyUiActions.clickOnUi(editor, `[role="menu"] [aria-label="Align"]`);
         // Open line height a second time, to make sure the state has been reset properly
-        TinyUiActions.clickOnUi(editor, `[role="menu"] [title="Line height"]`);
+        TinyUiActions.clickOnUi(editor, `[role="menu"] [aria-label="Line height"]`);
 
         await pAssertOptions(editor, menuSpec.menuSelector, [ '1', '1.1', '1.2', '1.3', '1.4', '1.5', '2' ], Optional.some('1.4'));
         menuSpec.close(editor, 'Line height');
+      });
+
+      it('TINY-9669: Disable lineheight button on noneditable content', () => {
+        TinyState.withNoneditableRootEditor<Editor>(hook.editor(), (editor) => {
+          editor.setContent('<div>Noneditable content</div><div contenteditable="true">Editable content</div>');
+          TinySelections.setSelection(editor, [ 0, 0 ], 0, [ 0, 0 ], 2);
+          UiFinder.exists(SugarBody.body(), '[aria-label="Line height"]:disabled');
+          TinySelections.setSelection(editor, [ 1, 0 ], 0, [ 1, 0 ], 2);
+          UiFinder.exists(SugarBody.body(), '[aria-label="Line height"]:not(:disabled)');
+        });
+      });
+
+      it('TINY-9669: Disable lineheight menuitem on noneditable content', async () => {
+        await TinyState.withNoneditableRootEditorAsync<Editor>(hook.editor(), async (editor) => {
+          editor.setContent('<div>Noneditable content</div><div contenteditable="true">Editable content</div>');
+          TinySelections.setSelection(editor, [ 0, 0 ], 0, [ 0, 0 ], 2);
+          TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
+          await TinyUiActions.pWaitForUi(editor, '[role="menu"] [aria-label="Line height"][aria-disabled="true"]');
+          TinyUiActions.keystroke(editor, Keys.escape());
+          TinySelections.setSelection(editor, [ 1, 0 ], 0, [ 1, 0 ], 2);
+          TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
+          await TinyUiActions.pWaitForUi(editor, '[role="menu"] [aria-label="Line height"][aria-disabled="false"]');
+          TinyUiActions.keystroke(editor, Keys.escape());
+        });
       });
     });
 
@@ -285,6 +309,32 @@ describe('browser.tinymce.themes.silver.editor.core.ChoiceControlsTest', () => {
 
         editor.formatter.apply('lang', { value: 'zh' });
         await TinyUiActions.pWaitForUi(editor, '.tox-tbtn.tox-tbtn--enabled');
+      });
+
+      context('Noneditable', () => {
+        it('TINY-9669: Disable language button on noneditable content', () => {
+          TinyState.withNoneditableRootEditor<Editor>(hook.editor(), (editor) => {
+            editor.setContent('<div>Noneditable content</div><div contenteditable="true">Editable content</div>');
+            TinySelections.setSelection(editor, [ 0, 0 ], 0, [ 0, 0 ], 2);
+            UiFinder.exists(SugarBody.body(), '[aria-label="Language"]:disabled');
+            TinySelections.setSelection(editor, [ 1, 0 ], 0, [ 1, 0 ], 2);
+            UiFinder.exists(SugarBody.body(), '[aria-label="Language"]:not(:disabled)');
+          });
+        });
+
+        it('TINY-9669: Disable language menuitem on noneditable content', async () => {
+          await TinyState.withNoneditableRootEditorAsync<Editor>(hook.editor(), async (editor) => {
+            editor.setContent('<div>Noneditable content</div><div contenteditable="true">Editable content</div>');
+            TinySelections.setSelection(editor, [ 0, 0 ], 0, [ 0, 0 ], 2);
+            TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
+            await TinyUiActions.pWaitForUi(editor, '[role="menu"] [aria-label="Language"][aria-disabled="true"]');
+            TinyUiActions.keystroke(editor, Keys.escape());
+            TinySelections.setSelection(editor, [ 1, 0 ], 0, [ 1, 0 ], 2);
+            TinyUiActions.clickOnMenu(editor, 'button:contains("Format")');
+            await TinyUiActions.pWaitForUi(editor, '[role="menu"] [aria-label="Language"][aria-disabled="false"]');
+            TinyUiActions.keystroke(editor, Keys.escape());
+          });
+        });
       });
     });
 

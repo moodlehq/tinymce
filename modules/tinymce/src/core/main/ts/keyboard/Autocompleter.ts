@@ -1,12 +1,11 @@
 import { Cell, Optional, Singleton, Throttler, Thunk, Type } from '@ephox/katamari';
 
 import Editor from '../api/Editor';
-import { fireAutocompleterEnd, fireAutocompleterStart, fireAutocompleterUpdate } from '../api/Events';
+import * as Events from '../api/Events';
 import { AutocompleteContext, getContext } from '../autocomplete/AutocompleteContext';
 import { AutocompleteLookupInfo, lookup, lookupWithContext } from '../autocomplete/AutocompleteLookup';
 import * as Autocompleters from '../autocomplete/Autocompleters';
 import { AutocompleterReloadArgs } from '../autocomplete/AutocompleteTypes';
-import * as Rtc from '../Rtc';
 
 interface ActiveAutocompleter {
   readonly trigger: string;
@@ -21,9 +20,9 @@ interface AutocompleterApi {
 const setupEditorInput = (editor: Editor, api: AutocompleterApi) => {
   const update = Throttler.last(api.load, 50);
 
-  editor.on('keypress compositionend', (e) => {
-    // IE will pass the escape key here, so just don't do anything on escape
-    if (e.which === 27) {
+  editor.on('input', (e) => {
+    // TINY-10715: Firefox on Android using Korean Gboard will produce stray composition events when you move the caret by tapping inside the composed text
+    if (e.inputType === 'insertCompositionText' && !editor.composing) {
       return;
     }
 
@@ -38,9 +37,14 @@ const setupEditorInput = (editor: Editor, api: AutocompleterApi) => {
       update.throttle();
     // Pressing <esc> closes the autocompleter
     } else if (keyCode === 27) {
+      update.cancel(); // We need to cancel here since Esc cancels the IME composition and triggers an input event
       api.cancelIfNecessary();
+    } else if (keyCode === 38 || keyCode === 40) {
+      // Arrow up and down keys needs to cancel the update since while composing arrow up or down will end the compose and issue a input event
+      // that causes the list to update and then the focus moves up to the first item in the auto completer list.
+      update.cancel();
     }
-  });
+  }, true); // Need to add this to the top so that it exectued before the silver keyboard event
 
   editor.on('remove', update.cancel);
 };
@@ -53,8 +57,7 @@ export const setup = (editor: Editor): void => {
 
   const cancelIfNecessary = () => {
     if (isActive()) {
-      Rtc.removeAutocompleterDecoration(editor);
-      fireAutocompleterEnd(editor);
+      Events.fireAutocompleterEnd(editor);
       uiActive.set(false);
       activeAutocompleter.clear();
     }
@@ -62,9 +65,6 @@ export const setup = (editor: Editor): void => {
 
   const commenceIfNecessary = (context: AutocompleteContext) => {
     if (!isActive()) {
-      // Create the wrapper
-      Rtc.addAutocompleterDecoration(editor, context.range);
-
       // store the element/context
       activeAutocompleter.set({
         trigger: context.trigger,
@@ -81,7 +81,7 @@ export const setup = (editor: Editor): void => {
 
   const doLookup = (fetchOptions: Record<string, any> | undefined): Optional<AutocompleteLookupInfo> =>
     activeAutocompleter.get().map(
-      (ac) => getContext(editor.dom, editor.selection.getRng(), ac.trigger)
+      (ac) => getContext(editor.dom, editor.selection.getRng(), ac.trigger, true)
         .bind((newContext) => lookupWithContext(editor, getAutocompleters, newContext, fetchOptions))
     ).getOrThunk(() => lookup(editor, getAutocompleters));
 
@@ -99,28 +99,43 @@ export const setup = (editor: Editor): void => {
 
             // Ensure the active autocompleter trigger matches, as the old one may have closed
             // and a new one may have opened. If it doesn't match, then do nothing.
-            if (ac.trigger === context.trigger) {
-              // close if we haven't found any matches in the last 10 chars
-              if (context.text.length - ac.matchLength >= 10) {
-                cancelIfNecessary();
-              } else {
-                activeAutocompleter.set({
-                  ...ac,
-                  matchLength: context.text.length
-                });
+            if (ac.trigger !== context.trigger) {
+              return;
+            }
 
-                if (uiActive.get()) {
-                  fireAutocompleterUpdate(editor, { lookupData });
-                } else {
-                  uiActive.set(true);
-                  fireAutocompleterStart(editor, { lookupData });
-                }
-              }
+            activeAutocompleter.set({
+              ...ac,
+              matchLength: context.text.length
+            });
+
+            if (uiActive.get()) {
+              Events.fireAutocompleterUpdateActiveRange(editor, { range: context.range });
+              Events.fireAutocompleterUpdate(editor, { lookupData });
+            } else {
+              uiActive.set(true);
+              Events.fireAutocompleterUpdateActiveRange(editor, { range: context.range });
+              Events.fireAutocompleterStart(editor, { lookupData });
             }
           });
         });
       }
     );
+  };
+
+  const isRangeInsideOrEqual = (innerRange: Range, outerRange: Range) => {
+    const startComparison = innerRange.compareBoundaryPoints(window.Range.START_TO_START, outerRange);
+    const endComparison = innerRange.compareBoundaryPoints(window.Range.END_TO_END, outerRange);
+
+    return startComparison >= 0 && endComparison <= 0;
+  };
+
+  const readActiveRange = () => {
+    return activeAutocompleter.get().bind(({ trigger }) => {
+      const selRange = editor.selection.getRng();
+      return getContext(editor.dom, selRange, trigger, uiActive.get())
+        .filter(({ range }) => isRangeInsideOrEqual(selRange, range))
+        .map(({ range }) => range);
+    });
   };
 
   editor.addCommand('mceAutocompleterReload', (_ui, value: AutocompleterReloadArgs) => {
@@ -129,6 +144,14 @@ export const setup = (editor: Editor): void => {
   });
 
   editor.addCommand('mceAutocompleterClose', cancelIfNecessary);
+
+  editor.addCommand('mceAutocompleterRefreshActiveRange', () => {
+    readActiveRange().each((range) => {
+      Events.fireAutocompleterUpdateActiveRange(editor, { range });
+    });
+  });
+
+  editor.editorCommands.addQueryStateHandler('mceAutoCompleterInRange', () => readActiveRange().isSome());
 
   setupEditorInput(editor, {
     cancelIfNecessary,

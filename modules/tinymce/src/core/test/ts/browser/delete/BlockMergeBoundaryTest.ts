@@ -4,6 +4,7 @@ import { Optional } from '@ephox/katamari';
 import { Hierarchy, SugarElement } from '@ephox/sugar';
 import { assert } from 'chai';
 
+import Schema from 'tinymce/core/api/html/Schema';
 import * as BlockMergeBoundary from 'tinymce/core/delete/BlockMergeBoundary';
 
 import * as ViewBlock from '../../module/test/ViewBlock';
@@ -20,7 +21,7 @@ describe('browser.tinymce.core.delete.BlockMergeBoundary', () => {
     const rng = document.createRange();
     rng.setStart(container.dom, cursorOffset);
     rng.setEnd(container.dom, cursorOffset);
-    return BlockMergeBoundary.read(viewBlock.get(), forward, rng);
+    return BlockMergeBoundary.read(Schema(), viewBlock.get(), forward, rng);
   };
 
   const assertBlockBoundaryPositions = (blockBoundaryOpt: Optional<BlockBoundary>, fromPath: number[], fromOffset: number, toPath: number[], toOffset: number) => {
@@ -69,6 +70,24 @@ describe('browser.tinymce.core.delete.BlockMergeBoundary', () => {
     it('Should be none since it is in the middle of a block with a preceding block', () => {
       setHtml('<p>c</p><p>ab</p>');
       const boundaryOpt = readBlockBoundary(true, [ 1, 0 ], 1);
+      assertBlockBoundaryNone(boundaryOpt);
+    });
+
+    it('TINY-10590: If the cursor is between an internal block and a text-node it should not count as a block boundary', () => {
+      setHtml('<div>A<p>B</p>C</div>');
+      const boundaryOpt = readBlockBoundary(false, [ 0 ], 2);
+      assertBlockBoundaryNone(boundaryOpt);
+    });
+
+    it('TINY-10590: If the cursor is in a text node and attempt to go outside of it, going backwards, it should not count as a boundary', () => {
+      setHtml('<div>A<p>B</p>C</div>');
+      const boundaryOpt = readBlockBoundary(false, [ 0, 1 ], 0);
+      assertBlockBoundaryNone(boundaryOpt);
+    });
+
+    it('TINY-10590: If the cursor is in a text node and attempt to go outside of it, going forwards, it should not count as a boundary', () => {
+      setHtml('<div>A<p>B</p>C</div>');
+      const boundaryOpt = readBlockBoundary(true, [ 0, 1 ], 1);
       assertBlockBoundaryNone(boundaryOpt);
     });
   });

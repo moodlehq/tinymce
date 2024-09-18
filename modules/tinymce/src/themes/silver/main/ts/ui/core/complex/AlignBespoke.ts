@@ -4,9 +4,16 @@ import { Arr, Fun, Optional } from '@ephox/katamari';
 import Editor from 'tinymce/core/api/Editor';
 import { UiFactoryBackstage } from 'tinymce/themes/silver/backstage/Backstage';
 
+import * as Events from '../../../api/Events';
 import { updateMenuIcon } from '../../dropdown/CommonDropdown';
+import { onSetupEditableToggle } from '../ControlUtils';
 import { createMenuItems, createSelectButton, FormatterFormatItem, SelectedFormat, SelectSpec } from './BespokeSelect';
 import { buildBasicStaticDataset } from './SelectDatasets';
+import * as Tooltip from './utils/Tooltip';
+
+const menuTitle = 'Align';
+const getTooltipPlaceholder = Fun.constant('Alignment {0}');
+const fallbackAlignment = 'left';
 
 const alignMenuItems = [
   { title: 'Left', icon: 'align-left', format: 'alignleft', command: 'JustifyLeft' },
@@ -24,10 +31,11 @@ const getSpec = (editor: Editor): SelectSpec => {
 
   const updateSelectMenuIcon = (comp: AlloyComponent) => {
     const match = getMatchingValue();
-    const alignment = match.fold(Fun.constant('left'), (item) => item.title.toLowerCase());
+    const alignment = match.fold(Fun.constant(fallbackAlignment), (item) => item.title.toLowerCase());
     AlloyTriggers.emitWith(comp, updateMenuIcon, {
       icon: `align-${alignment}`
     });
+    Events.fireAlignTextUpdate(editor, { value: alignment });
   };
 
   const dataset = buildBasicStaticDataset(alignMenuItems);
@@ -37,7 +45,7 @@ const getSpec = (editor: Editor): SelectSpec => {
       .each((item) => editor.execCommand(item.command));
 
   return {
-    tooltip: 'Align',
+    tooltip: Tooltip.makeTooltipText(editor, getTooltipPlaceholder(), fallbackAlignment),
     text: Optional.none(),
     icon: Optional.some('align-left'),
     isSelectedFor,
@@ -52,12 +60,13 @@ const getSpec = (editor: Editor): SelectSpec => {
 };
 
 const createAlignButton = (editor: Editor, backstage: UiFactoryBackstage): SketchSpec =>
-  createSelectButton(editor, backstage, getSpec(editor));
+  createSelectButton(editor, backstage, getSpec(editor), getTooltipPlaceholder, 'AlignTextUpdate', 'align');
 
 const createAlignMenu = (editor: Editor, backstage: UiFactoryBackstage): void => {
-  const menuItems = createMenuItems(editor, backstage, getSpec(editor));
+  const menuItems = createMenuItems(backstage, getSpec(editor));
   editor.ui.registry.addNestedMenuItem('align', {
-    text: backstage.shared.providers.translate('Align'),
+    text: backstage.shared.providers.translate(menuTitle),
+    onSetup: onSetupEditableToggle(editor),
     getSubmenuItems: () => menuItems.items.validateItems(menuItems.getStyleItems())
   });
 };

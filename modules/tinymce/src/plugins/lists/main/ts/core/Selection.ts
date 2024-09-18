@@ -1,9 +1,11 @@
 import { Arr, Optional, Type } from '@ephox/katamari';
+import { SugarElement, Traverse } from '@ephox/sugar';
 
 import Editor from 'tinymce/core/api/Editor';
 import Schema from 'tinymce/core/api/html/Schema';
 import Tools from 'tinymce/core/api/util/Tools';
 
+import * as Options from '../api/Options';
 import * as NodeType from './NodeType';
 
 const listNames = [ 'OL', 'UL', 'DL' ];
@@ -62,10 +64,17 @@ const isListHost = (schema: Schema, node: Node): boolean =>
 
 const getClosestListHost = (editor: Editor, elm: Node): HTMLElement => {
   const parentBlocks = editor.dom.getParents<HTMLElement>(elm, editor.dom.isBlock);
-  const parentBlock = Arr.find(parentBlocks, (elm) => isListHost(editor.schema, elm));
+  const isNotForcedRootBlock = (elm: HTMLElement) => elm.nodeName.toLowerCase() !== Options.getForcedRootBlock(editor);
+  const parentBlock = Arr.find(parentBlocks, (elm) => isNotForcedRootBlock(elm) && isListHost(editor.schema, elm));
 
   return parentBlock.getOr(editor.getBody());
 };
+
+const isListInsideAnLiWithFirstAndLastNotListElement = (list: SugarElement<Node>): boolean =>
+  Traverse.parent(list).exists((parent) => NodeType.isListItemNode(parent.dom)
+    && Traverse.firstChild(parent).exists((firstChild) => !NodeType.isListNode(firstChild.dom))
+    && Traverse.lastChild(parent).exists((lastChild) => !NodeType.isListNode(lastChild.dom))
+  );
 
 const findLastParentListNode = (editor: Editor, elm: Element): Optional<HTMLOListElement | HTMLUListElement> => {
   const parentLists = editor.dom.getParents<HTMLOListElement | HTMLUListElement>(elm, 'ol,ul', getClosestListHost(editor, elm));
@@ -79,9 +88,18 @@ const getSelectedLists = (editor: Editor): Array<HTMLOListElement | HTMLUListEle
   return firstList.toArray().concat(subsequentLists);
 };
 
+const getParentLists = (editor: Editor) => {
+  const elm = editor.selection.getStart();
+  return editor.dom.getParents<HTMLOListElement | HTMLUListElement>(elm, 'ol,ul', getClosestListHost(editor, elm));
+};
+
 const getSelectedListRoots = (editor: Editor): HTMLElement[] => {
   const selectedLists = getSelectedLists(editor);
-  return getUniqueListRoots(editor, selectedLists);
+  const parentLists = getParentLists(editor);
+  return Arr.find(parentLists, (p) => isListInsideAnLiWithFirstAndLastNotListElement(SugarElement.fromDom(p))).fold(
+    () => getUniqueListRoots(editor, selectedLists),
+    (l) => [ l ]
+  );
 };
 
 const getUniqueListRoots = (editor: Editor, lists: HTMLElement[]): HTMLElement[] => {

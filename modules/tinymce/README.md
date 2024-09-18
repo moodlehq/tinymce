@@ -60,12 +60,12 @@ TinyMCE is an open source software project and we encourage developers to contri
 
 __Basic Rules__
 
-* Contributed code will be licensed under the MIT license
+* Contributed code will be licensed under the GNU General Public License Version 2 or later
 * Copyright notices will be changed to Ephox Corporation, contributors will get credit for their work
 * All third party code will be reviewed, tested and possibly modified before being released
 * All contributors will have to have signed the Contributor License Agreement
 
-These basic rules ensures that the contributed code remains open source and under the MIT license.
+These basic rules ensures that the contributed code remains open source and under the GNU General Public License Version 2 or later license.
 
 __How to Contribute to the Code__
 
@@ -82,6 +82,6 @@ Docs are hosted on Github in the [tinymce-docs](https://github.com/tinymce/tinym
 
 [How to contribute](https://github.com/tinymce/tinymce-docs/blob/main/CONTRIBUTING.md) to the docs, including a style guide, can be found on the GitHub repo.
 
-[Documentation](https://www.tiny.cloud/docs/tinymce/6/)
+[Documentation](https://www.tiny.cloud/docs/tinymce/7/)
 
 [Log feedback](https://github.com/tinymce/tinymce/labels/6.x)

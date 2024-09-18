@@ -5,7 +5,7 @@ import Editor from './Editor';
 import { PastePostProcessEvent, PastePreProcessEvent } from './EventTypes';
 import { Formats } from './fmt/Format';
 import { AllowedFormat } from './fmt/StyleFormat';
-import { SchemaType } from './html/Schema';
+import { CustomElementSpec, SchemaType } from './html/Schema';
 import { EditorUiApi, Toolbar } from './ui/Ui';
 
 export type EntityEncoding = 'named' | 'numeric' | 'raw' | 'named,numeric' | 'named+numeric' | 'numeric,named' | 'numeric+named';
@@ -84,17 +84,20 @@ interface BaseEditorOptions {
   contextmenu?: string | string[] | false;
   contextmenu_never_use_native?: boolean;
   convert_fonts_to_spans?: boolean;
+  convert_unsafe_embeds?: boolean;
   convert_urls?: boolean;
   custom_colors?: boolean;
-  custom_elements?: string;
+  custom_elements?: string | Record<string, CustomElementSpec>;
   custom_ui_selector?: string;
   custom_undo_redo_levels?: number;
+  default_font_stack?: string[];
   deprecation_warnings?: boolean;
   directionality?: 'ltr' | 'rtl';
   doctype?: string;
   document_base_url?: string;
   draggable_modal?: boolean;
   editable_class?: string;
+  editable_root?: boolean;
   element_format?: 'xhtml' | 'html';
   elementpath?: boolean;
   encoding?: string;
@@ -121,6 +124,7 @@ interface BaseEditorOptions {
   formats?: Formats;
   format_noneditable_selector?: string;
   height?: number | string;
+  help_accessibility?: boolean;
   hidden_input?: boolean;
   highlight_on_focus?: boolean;
   icons?: string;
@@ -160,12 +164,14 @@ interface BaseEditorOptions {
   min_width?: number;
   model?: string;
   model_url?: string;
+  newdocument_content?: string;
   newline_behavior?: 'block' | 'linebreak' | 'invert' | 'default';
   no_newline_selector?: string;
   noneditable_class?: string;
   noneditable_regexp?: RegExp | RegExp[];
   nowrap?: boolean;
   object_resizing?: boolean | string;
+  pad_empty_with_br?: boolean;
   paste_as_text?: boolean;
   paste_block_drop?: boolean;
   paste_data_images?: boolean;
@@ -189,6 +195,8 @@ interface BaseEditorOptions {
   resize?: boolean | 'both';
   resize_img_proportional?: boolean;
   root_name?: string;
+  sandbox_iframes?: boolean;
+  sandbox_iframes_exclusions?: string[];
   schema?: SchemaType;
   selector?: string;
   setup?: SetupCallback;
@@ -224,6 +232,7 @@ interface BaseEditorOptions {
   toolbar_sticky?: boolean;
   toolbar_sticky_offset?: number;
   typeahead_urls?: boolean;
+  ui_mode?: 'combined' | 'split';
   url_converter?: URLConverter;
   url_converter_scope?: any;
   urlconverter_callback?: URLConverterCallback;
@@ -237,6 +246,7 @@ interface BaseEditorOptions {
   visual_table_class?: string;
   width?: number | string;
   xss_sanitization?: boolean;
+  license_key?: string;
 
   // Internal settings (used by cloud or tests)
   disable_nodechange?: boolean;
@@ -280,10 +290,14 @@ export interface EditorOptions extends NormalizedEditorOptions {
   color_default_foreground: string;
   content_css: string[];
   contextmenu: string[];
+  convert_unsafe_embeds: boolean;
   custom_colors: boolean;
+  default_font_stack: string[];
   document_base_url: string;
+  init_content_sync: boolean;
   draggable_modal: boolean;
   editable_class: string;
+  editable_root: boolean;
   font_css: string[];
   font_family_formats: string;
   font_size_classes: string;
@@ -312,15 +326,19 @@ export interface EditorOptions extends NormalizedEditorOptions {
   menu: Record<string, { title: string; items: string }>;
   menubar: boolean | string;
   model: string;
+  newdocument_content: string;
   no_newline_selector: string;
   noneditable_class: string;
   noneditable_regexp: RegExp[];
   object_resizing: string;
+  pad_empty_with_br: boolean;
   paste_as_text: boolean;
   preview_styles: string;
   promotion: boolean;
   readonly: boolean;
   removed_menuitems: string;
+  sandbox_iframes: boolean;
+  sandbox_iframes_exclusions: string[];
   toolbar: boolean | string | string[] | Array<ToolbarGroup>;
   toolbar_groups: Record<string, Toolbar.GroupToolbarButtonSpec>;
   toolbar_location: ToolbarLocation;

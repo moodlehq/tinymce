@@ -61,8 +61,8 @@ describe('browser.tinymce.themes.silver.editor.bespoke.StyleSelectFormatNamesTes
       classes: [ arr.has('tox-collection__group') ],
       children: Arr.map(expectedItems, (expected) => s.element('div', {
         attrs: {
-          role: str.is('menuitemcheckbox'),
-          title: str.is(expected.title)
+          'role': str.is('menuitemcheckbox'),
+          'aria-label': str.is(expected.title)
         },
         children: [
           s.element('div', {
@@ -91,7 +91,7 @@ describe('browser.tinymce.themes.silver.editor.bespoke.StyleSelectFormatNamesTes
   };
 
   it('Configured style_formats are included in the styles toolbar button', async () => {
-    await MenuUtils.pOpenMenu('Format', 'Paragraph:last');
+    await MenuUtils.pOpenMenu('Format', 'Formats:last');
     assertStyleSelectMenuItems('Checking style select items', [
       { title: 'Named inline format', element: 'span' },
       { title: 'Named block format', element: 'h1' },

@@ -1,4 +1,5 @@
-import { Optional, Type, Unicode } from '@ephox/katamari';
+import { Arr, Optional, Type, Unicode } from '@ephox/katamari';
+import { Has, SugarElement } from '@ephox/sugar';
 
 import BookmarkManager from 'tinymce/core/api/dom/BookmarkManager';
 import DOMUtils from 'tinymce/core/api/dom/DOMUtils';
@@ -11,7 +12,7 @@ import * as Bookmark from '../core/Bookmark';
 import { listToggleActionFromListName } from '../core/ListAction';
 import * as NodeType from '../core/NodeType';
 import * as Selection from '../core/Selection';
-import { hasNonEditableBlocksSelected, isCustomList, isWithinNonEditableList } from '../core/Util';
+import { isCustomList, isWithinNonEditableList } from '../core/Util';
 import { flattenListSelection } from './Indendation';
 
 interface ListDetail {
@@ -62,6 +63,14 @@ const getEndPointNode = (editor: Editor, rng: Range, start: Boolean, root: Node)
     container = container.nextSibling;
   }
 
+  const findBlockAncestor = (node: Node) => {
+    while (!editor.dom.isBlock(node) && node.parentNode && root !== node) {
+      node = node.parentNode;
+    }
+
+    return node;
+  };
+
   // The reason why the next two if statements exist is because when the root node is a table cell (possibly some other node types)
   // then the highest we can go up the dom hierarchy is one level below the table cell.
   // So what happens when we have a bunch of inline nodes and text nodes in the table cell
@@ -73,7 +82,7 @@ const getEndPointNode = (editor: Editor, rng: Range, start: Boolean, root: Node)
   // For more info look at #TINY-6853
 
   const findBetterContainer = (container: Node, forward: boolean): Optional<Node> => {
-    const walker = new DomTreeWalker(container, root);
+    const walker = new DomTreeWalker(container, findBlockAncestor(container));
     const dir = forward ? 'next' : 'prev';
     let node;
     while ((node = walker[dir]())) {
@@ -191,10 +200,26 @@ const hasCompatibleStyle = (dom: DOMUtils, sib: Element, detail: ListDetail): bo
   return sibStyle === detailStyle;
 };
 
+/*
+  Find the first element we would transform into a li-element if given no constraints.
+  If the common ancestor is higher up than that provide it as the starting-point for the search for the root instead of the first selected element.
+  This helps avoid issues with divs that should become li-elements are detected as the root when they should not be.
+*/
+const getRootSearchStart = (editor: Editor, range: Range): Node => {
+  const start = editor.selection.getStart(true);
+  const startPoint = getEndPointNode(editor, range, true, editor.getBody());
+
+  if (Has.ancestor(SugarElement.fromDom(startPoint), SugarElement.fromDom(range.commonAncestorContainer))) {
+    return range.commonAncestorContainer;
+  } else {
+    return start;
+  }
+};
+
 const applyList = (editor: Editor, listName: string, detail: ListDetail): void => {
   const rng = editor.selection.getRng();
   let listItemName = 'LI';
-  const root = Selection.getClosestListHost(editor, editor.selection.getStart(true));
+  const root = Selection.getClosestListHost(editor, getRootSearchStart(editor, rng));
   const dom = editor.dom;
 
   if (dom.getContentEditable(editor.selection.getNode()) === 'false') {
@@ -208,7 +233,8 @@ const applyList = (editor: Editor, listName: string, detail: ListDetail): void =
   }
 
   const bookmark = Bookmark.createBookmark(rng);
-  const selectedTextBlocks = getSelectedTextBlocks(editor, rng, root);
+
+  const selectedTextBlocks = Arr.filter(getSelectedTextBlocks(editor, rng, root), editor.dom.isEditable);
 
   Tools.each(selectedTextBlocks, (block) => {
     let listBlock: HTMLElement;
@@ -298,17 +324,38 @@ const updateList = (editor: Editor, list: Element, listName: 'UL' | 'OL' | 'DL',
   }
 };
 
+const updateCustomList = (editor: Editor, list: Element, listName: 'UL' | 'OL' | 'DL', detail: ListDetail): void => {
+  list.classList.forEach((cls, _, classList) => {
+    if (cls.startsWith('tox-')) {
+      classList.remove(cls);
+      if (classList.length === 0) {
+        list.removeAttribute('class');
+      }
+    }
+  });
+  if (list.nodeName !== listName) {
+    const newList = editor.dom.rename(list, listName);
+    updateListWithDetails(editor.dom, newList, detail);
+    fireListEvent(editor, listToggleActionFromListName(listName), newList);
+  } else {
+    updateListWithDetails(editor.dom, list, detail);
+    fireListEvent(editor, listToggleActionFromListName(listName), list);
+  }
+};
+
 const toggleMultipleLists = (editor: Editor, parentList: HTMLElement | null, lists: HTMLElement[], listName: 'UL' | 'OL' | 'DL', detail: ListDetail): void => {
   const parentIsList = NodeType.isListNode(parentList);
-  if (parentIsList && parentList.nodeName === listName && !hasListStyleDetail(detail)) {
+  if (parentIsList && parentList.nodeName === listName && !hasListStyleDetail(detail) && !isCustomList(parentList)) {
     flattenListSelection(editor);
   } else {
     applyList(editor, listName, detail);
     const bookmark = Bookmark.createBookmark(editor.selection.getRng());
     const allLists = parentIsList ? [ parentList, ...lists ] : lists;
 
+    const updateFunction = (parentIsList && isCustomList(parentList)) ? updateCustomList : updateList;
+
     Tools.each(allLists, (elm) => {
-      updateList(editor, elm, listName, detail);
+      updateFunction(editor, elm, listName, detail);
     });
 
     editor.selection.setRng(Bookmark.resolveBookmark(bookmark));
@@ -329,6 +376,16 @@ const toggleSingleList = (editor: Editor, parentList: HTMLElement | null, listNa
       flattenListSelection(editor);
     } else {
       const bookmark = Bookmark.createBookmark(editor.selection.getRng());
+      if (isCustomList(parentList)) {
+        parentList.classList.forEach((cls, _, classList) => {
+          if (cls.startsWith('tox-')) {
+            classList.remove(cls);
+            if (classList.length === 0) {
+              parentList.removeAttribute('class');
+            }
+          }
+        });
+      }
       updateListWithDetails(editor.dom, parentList, detail);
       const newList = editor.dom.rename(parentList, listName) as HTMLElement;
       mergeWithAdjacentLists(editor.dom, newList);
@@ -344,7 +401,7 @@ const toggleSingleList = (editor: Editor, parentList: HTMLElement | null, listNa
 
 const toggleList = (editor: Editor, listName: 'UL' | 'OL' | 'DL', _detail: ListDetail | null): void => {
   const parentList = Selection.getParentList(editor);
-  if (isWithinNonEditableList(editor, parentList) || hasNonEditableBlocksSelected(editor)) {
+  if (isWithinNonEditableList(editor, parentList)) {
     return;
   }
 

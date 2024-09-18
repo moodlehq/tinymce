@@ -8,6 +8,7 @@ import { EditorEvent } from '../api/util/EventDispatcher';
 import Tools from '../api/util/Tools';
 import VK from '../api/util/VK';
 import * as CaretContainer from '../caret/CaretContainer';
+import * as Empty from '../dom/Empty';
 import * as Rtc from '../Rtc';
 
 /**
@@ -18,8 +19,8 @@ import * as Rtc from '../Rtc';
  */
 
 interface Quirks {
-  refreshContentEditable (): void;
-  isHidden (): boolean;
+  refreshContentEditable(): void;
+  isHidden(): boolean;
 }
 
 const Quirks = (editor: Editor): Quirks => {
@@ -92,7 +93,7 @@ const Quirks = (editor: Editor): Quirks => {
         const body = editor.getBody();
 
         // Selection is collapsed but the editor isn't empty
-        if (isCollapsed && !dom.isEmpty(body)) {
+        if (isCollapsed && !Empty.isEmptyNode(editor.schema, body)) {
           return;
         }
 
@@ -235,7 +236,7 @@ const Quirks = (editor: Editor): Quirks => {
       // Workaround for bug, http://bugs.webkit.org/show_bug.cgi?id=12250
       // WebKit can't even do simple things like selecting an image
       // Needs to be the setBaseAndExtend or it will fail to select floated images
-      if (/^(IMG|HR)$/.test(target.nodeName) && dom.isEditable(target.parentNode)) {
+      if (/^(IMG|HR)$/.test(target.nodeName) && dom.isEditable(target)) {
         e.preventDefault();
         editor.selection.select(target);
         editor.nodeChanged();

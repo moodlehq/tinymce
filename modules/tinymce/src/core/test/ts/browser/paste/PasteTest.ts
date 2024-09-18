@@ -1,4 +1,5 @@
 import { afterEach, before, beforeEach, context, describe, it } from '@ephox/bedrock-client';
+import { Singleton } from '@ephox/katamari';
 import { PlatformDetection } from '@ephox/sand';
 import { TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
@@ -8,6 +9,8 @@ import { PastePostProcessEvent, PastePreProcessEvent } from 'tinymce/core/api/Ev
 import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
 import * as PasteUtils from 'tinymce/core/paste/PasteUtils';
 
+import * as PasteEventUtils from '../../module/test/PasteEventUtils';
+
 describe('browser.tinymce.core.paste.PasteTest', () => {
   const browser = PlatformDetection.detect().browser;
   const hook = TinyHooks.bddSetupLight<Editor>({
@@ -15,6 +18,13 @@ describe('browser.tinymce.core.paste.PasteTest', () => {
     indent: false,
     base_url: '/project/tinymce/js/tinymce'
   }, [], true);
+
+  const testPasteHtml = (hook: TinyHooks.Hook<Editor>, html: string, expected: string) => () => {
+    const editor = hook.editor();
+    editor.setContent('');
+    editor.execCommand('mceInsertClipboardContent', false, { html });
+    TinyAssertions.assertContent(editor, expected);
+  };
 
   beforeEach(() => {
     const editor = hook.editor();
@@ -53,6 +63,23 @@ describe('browser.tinymce.core.paste.PasteTest', () => {
       { state: false },
       { state: true }
     ], 'Should be enabled again');
+  });
+
+  it('TINY-10938: Toggle query returns correct value', () => {
+    const editor = hook.editor();
+
+    // If a previous test left this toggled on...
+    if (editor.queryCommandState('mceTogglePlainTextPaste')) {
+      editor.execCommand('mceTogglePlainTextPaste');
+    }
+
+    assert.isFalse(editor.queryCommandState('mceTogglePlainTextPaste'));
+    editor.execCommand('mceTogglePlainTextPaste');
+    assert.isTrue(editor.queryCommandState('mceTogglePlainTextPaste'));
+    editor.execCommand('mceTogglePlainTextPaste');
+    assert.isFalse(editor.queryCommandState('mceTogglePlainTextPaste'));
+    editor.execCommand('mceTogglePlainTextPaste');
+    assert.isTrue(editor.queryCommandState('mceTogglePlainTextPaste'));
   });
 
   it('TBA: Paste simple text content', () => {
@@ -445,7 +472,7 @@ describe('browser.tinymce.core.paste.PasteTest', () => {
       editor.execCommand('mceInsertClipboardContent', false, {
         html: (
           '<span style="color:#ff0000; text-indent: 10px">a</span>' +
-          '<span style="color:rgb(255, 0, 0); text-indent: 10px">b</span>'
+          '<span style="color:#ff0000; text-indent: 10px">b</span>'
         )
       });
 
@@ -461,7 +488,7 @@ describe('browser.tinymce.core.paste.PasteTest', () => {
         html: (
           '<span style="color:red; text-indent: 10px">a</span>' +
           '<span style="color:#ff0000; text-indent: 10px">b</span>' +
-          '<span style="color:rgb(255, 0, 0); text-indent: 10px">c</span>'
+          '<span style="color:#ff0000; text-indent: 10px">c</span>'
         )
       });
 
@@ -470,18 +497,101 @@ describe('browser.tinymce.core.paste.PasteTest', () => {
 
     it('TBA: paste webkit remove runtime styles (color) in the same (color) (rgb)', () => {
       const editor = hook.editor();
-      editor.setContent('<p style="color:rgb(255, 0, 0)">Test</span>');
+      editor.setContent('<p style="color:#ff0000">Test</span>');
       TinySelections.setSelection(editor, [ 0, 0 ], 0, [ 0, 0 ], 4);
 
       editor.execCommand('mceInsertClipboardContent', false, {
         html: (
           '<span style="color:red; text-indent: 10px">a</span>' +
           '<span style="color:#ff0000; text-indent: 10px">b</span>' +
-          '<span style="color:rgb(255, 0, 0); text-indent: 10px">c</span>'
+          '<span style="color:#ff0000; text-indent: 10px">c</span>'
         )
       });
 
-      TinyAssertions.assertContent(editor, '<p style="color: rgb(255, 0, 0);">abc</p>');
+      TinyAssertions.assertContent(editor, '<p style="color: #ff0000;">abc</p>');
+    });
+
+    it('TINY-9997: Paste command does not dispatch input events', async () => {
+      const editor = hook.editor();
+      const beforeinputEvent = Singleton.value<EditorEvent<InputEvent>>();
+      const inputEvent = Singleton.value<EditorEvent<InputEvent>>();
+      const setBeforeInputEvent = (e: EditorEvent<InputEvent>) => beforeinputEvent.set(e);
+      const setInputEvent = (e: EditorEvent<InputEvent>) => inputEvent.set(e);
+
+      editor.on('beforeinput', setBeforeInputEvent);
+      editor.on('input', setInputEvent);
+
+      const html = '<p>Test</p>';
+      editor.execCommand('mceInsertClipboardContent', false, { html });
+      await PasteEventUtils.pWaitForAndAssertEventsDoNotFire([ beforeinputEvent, inputEvent ]);
+      TinyAssertions.assertContent(editor, html);
+
+      editor.off('beforeinput', setBeforeInputEvent);
+      editor.off('input', setInputEvent);
+    });
+
+    context('iframe sandboxing', () => {
+      context('sandbox_iframes: false', () => {
+        const hook = TinyHooks.bddSetupLight<Editor>({
+          base_url: '/project/tinymce/js/tinymce',
+          sandbox_iframes: false
+        });
+
+        it('TINY-10348: Pasted iframe should not be sandboxed',
+          testPasteHtml(hook, '<iframe src="about:blank"></iframe>', '<p><iframe src="about:blank"></iframe></p>'));
+      });
+
+      context('sandbox_iframes: true', () => {
+        const hook = TinyHooks.bddSetupLight<Editor>({
+          base_url: '/project/tinymce/js/tinymce',
+          sandbox_iframes: true
+        });
+
+        it('TINY-10348: Pasted iframe should be sandboxed',
+          testPasteHtml(hook, '<iframe src="about:blank"></iframe>', '<p><iframe src="about:blank" sandbox=""></iframe></p>'));
+      });
+    });
+
+    context('Convert unsafe embeds', () => {
+      context('convert_unsafe_embeds: false', () => {
+        const hook = TinyHooks.bddSetupLight<Editor>({
+          base_url: '/project/tinymce/js/tinymce',
+          convert_unsafe_embeds: false
+        });
+
+        it('TINY-10349: Pasted object element should not be converted',
+          testPasteHtml(hook, '<object data="about:blank"></object>', '<p><object data="about:blank"></object></p>'));
+
+        it('TINY-10349: Pasted embed element should not be converted',
+          testPasteHtml(hook, '<embed src="about:blank">', '<p><embed src="about:blank"></p>'));
+      });
+
+      context('convert_unsafe_embeds: true', () => {
+        const hook = TinyHooks.bddSetupLight<Editor>({
+          base_url: '/project/tinymce/js/tinymce',
+          convert_unsafe_embeds: true
+        });
+
+        it('TINY-10349: Pasted object element should be converted to iframe',
+          testPasteHtml(hook, '<object data="about:blank">', '<p><iframe src="about:blank" sandbox=""></iframe></p>'));
+
+        it('TINY-10349: Pasted embed element should be converted to iframe',
+          testPasteHtml(hook, '<embed src="about:blank">', '<p><iframe src="about:blank" sandbox=""></iframe></p>'));
+      });
+
+      context('convert_unsafe_embeds: true, sandbox_iframes: true', () => {
+        const hook = TinyHooks.bddSetupLight<Editor>({
+          base_url: '/project/tinymce/js/tinymce',
+          convert_unsafe_embeds: true,
+          sandbox_iframes: true
+        });
+
+        it('TINY-10349: Pasted object element should be converted to sandboxed iframe',
+          testPasteHtml(hook, '<object data="about:blank"></object>', '<p><iframe src="about:blank" sandbox=""></iframe></p>'));
+
+        it('TINY-10349: Pasted embed element should be converted to sandboxed iframe',
+          testPasteHtml(hook, '<embed src="about:blank">', '<p><iframe src="about:blank" sandbox=""></iframe></p>'));
+      });
     });
   });
 });

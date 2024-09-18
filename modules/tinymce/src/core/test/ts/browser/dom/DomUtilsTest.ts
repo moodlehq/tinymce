@@ -15,6 +15,8 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
   const getTestElement = (id: string = 'test') =>
     DOM.get(id) as HTMLElement;
 
+  const createSvgElement = (name: string) => document.createElementNS('http://www.w3.org/2000/svg', name);
+
   it('parseStyle', () => {
     DOM.add(document.body, 'div', { id: 'test' });
 
@@ -261,12 +263,35 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
     assert.equal(DOM.getAttrib(nonElement, 'test', ''), '');
     assert.equal(DOM.getAttrib(nonElement, 'test', 'x'), 'x');
 
+    const svg = createSvgElement('svg');
+    DOM.setAttrib(svg, 'class', 'foo');
+    assert.equal(DOM.getAttrib(svg, 'class'), 'foo');
+
     DOM.remove('test');
   });
 
   it('setGetAttrib on null', () => {
     assert.equal(DOM.getAttrib(null, 'test'), '');
     DOM.setAttrib(null, 'test', null);
+  });
+
+  it('getContentEditable', () => {
+    const test = DOM.add(document.body, 'div', { id: 'test' });
+
+    test.innerHTML = `
+      <span contenteditable="false"></span>
+      <span contenteditable="true"></span>
+      <span></span>
+      <svg></svg>
+    `;
+    const elms = test.children;
+
+    assert.equal(DOM.getContentEditable(elms[0]), 'false');
+    assert.equal(DOM.getContentEditable(elms[1]), 'true');
+    assert.equal(DOM.getContentEditable(elms[2]), null, 'inherit counts as null');
+    assert.equal(DOM.getContentEditable(elms[3]), null, 'We can not get the contentEditable state from SVGElement since it does not have that property');
+
+    DOM.remove('test');
   });
 
   it('getAttribs', () => {
@@ -323,6 +348,12 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
     assert.isUndefined(DOM.getStyle(null, 'fontSize'));
 
     DOM.remove('test');
+  });
+
+  it('setStyle/getStyle on a SVG element', () => {
+    const svg = createSvgElement('svg');
+    DOM.setStyle(svg, 'color', 'red');
+    assert.equal(DOM.getStyle(svg, 'color'), 'red');
   });
 
   it('getPos', () => {
@@ -690,7 +721,7 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
     assert.isTrue(DOM.isEmpty(getTestElement()));
 
     DOM.setHTML('test', '<div><!-- comment --></div>');
-    assert.isFalse(DOM.isEmpty(getTestElement()));
+    assert.isTrue(DOM.isEmpty(getTestElement()));
 
     DOM.setHTML('test', '<span data-mce-bogus="1"></span>');
     assert.isTrue(DOM.isEmpty(getTestElement()));
@@ -724,6 +755,13 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
     assert.isFalse(DOM.isEmpty(elm, { img: true }));
   });
 
+  it('isEmpty with isContent optional predicate for custom non-empty elements', () => {
+    const elm = DOM.create('p', {}, '<em><br></em>');
+    assert.isFalse(DOM.isEmpty(elm, undefined, {
+      isContent: (node) => node.nodeName === 'EM'
+    }));
+  });
+
   it('isEmpty on pre', () => {
     const elm = DOM.create('pre', {}, '  ');
     assert.isFalse(DOM.isEmpty(elm));
@@ -734,6 +772,15 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
 
     const elm = domWithoutSchema.create('p', {}, '<img>');
     assert.isFalse(domWithoutSchema.isEmpty(elm, { img: true }));
+  });
+
+  it('isEmpty with isContent optional predicate without schema', () => {
+    const domWithoutSchema = DOMUtils(document, { keep_values: true });
+
+    const elm = domWithoutSchema.create('p', {}, '<a href="http://some.url/"></a>');
+    assert.isFalse(domWithoutSchema.isEmpty(elm, undefined, {
+      isContent: (node) => node.nodeName === 'A'
+    }));
   });
 
   it('isEmpty on P with BR in EM', () => {
@@ -933,6 +980,18 @@ describe('browser.tinymce.core.dom.DOMUtilsTest', () => {
       editableRoot: false,
       path: [ 0, 0 ],
       expected: true
+    }));
+
+    it('TINY-10237: isEditable on SVG element should always be considered non-editable', testIsEditable({
+      input: '<svg></svg>',
+      path: [ 0 ],
+      expected: false
+    }));
+
+    it('TINY-10809: isEditable on math element should always be considered non-editable', testIsEditable({
+      input: '<math></math>',
+      path: [ 0 ],
+      expected: false
     }));
   });
 });

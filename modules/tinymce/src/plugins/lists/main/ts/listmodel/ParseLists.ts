@@ -1,8 +1,8 @@
 import { Arr, Cell, Optional } from '@ephox/katamari';
-import { Compare, SugarElement, Traverse } from '@ephox/sugar';
+import { Compare, SugarElement, SugarNode, Traverse } from '@ephox/sugar';
 
-import { createEntry, Entry } from './Entry';
-import { isList } from './Util';
+import { createEntry, Entry, EntryFragment } from './Entry';
+import { isList, isListItem, ListType } from './Util';
 
 type Parser = (depth: number, itemSelection: Optional<ItemSelection>, selectionState: Cell<boolean>, element: SugarElement) => Entry[];
 
@@ -16,32 +16,66 @@ export interface EntrySet {
   readonly sourceList: SugarElement<HTMLElement>;
 }
 
+const parseSingleItem: Parser = (depth: number, itemSelection: Optional<ItemSelection>, selectionState: Cell<boolean>, item: SugarElement<HTMLElement>): Entry[] => {
+  if (SugarNode.isComment(item)) {
+    return [{
+      depth: depth + 1,
+      content: item.dom.nodeValue ?? '',
+      dirty: false,
+      isSelected: false,
+      isComment: true
+    }];
+  }
+
+  itemSelection.each((selection) => {
+    if (Compare.eq(selection.start, item)) {
+      selectionState.set(true);
+    }
+  });
+
+  const currentItemEntry = createEntry(item, depth, selectionState.get());
+
+  // Update selectionState (end)
+  itemSelection.each((selection) => {
+    if (Compare.eq(selection.end, item)) {
+      selectionState.set(false);
+    }
+  });
+
+  const childListEntries: Entry[] = Traverse.lastChild(item)
+    .filter(isList)
+    .map((list) => parseList(depth, itemSelection, selectionState, list))
+    .getOr([]);
+
+  return currentItemEntry.toArray().concat(childListEntries);
+};
+
 const parseItem: Parser = (depth: number, itemSelection: Optional<ItemSelection>, selectionState: Cell<boolean>, item: SugarElement<HTMLElement>): Entry[] =>
-  Traverse.firstChild(item).filter(isList).fold(() => {
+  Traverse.firstChild(item).filter(isList).fold(
+    () => parseSingleItem(depth, itemSelection, selectionState, item),
+    (list) => {
+      const parsedSiblings = Arr.foldl(Traverse.children(item), (acc: Entry[], liChild, i) => {
+        if (i === 0) {
+          return acc;
+        } else {
+          if (isListItem(liChild)) {
+            return acc.concat(parseSingleItem(depth, itemSelection, selectionState, liChild));
+          } else {
+            const fragment: EntryFragment = {
+              isFragment: true,
+              depth,
+              content: [ liChild ],
+              isSelected: false,
+              dirty: false,
+              parentListType: SugarNode.name(list) as ListType
+            };
+            return acc.concat(fragment);
+          }
+        }
+      }, []);
 
-    // Update selectionState (start)
-    itemSelection.each((selection) => {
-      if (Compare.eq(selection.start, item)) {
-        selectionState.set(true);
-      }
+      return parseList(depth, itemSelection, selectionState, list).concat(parsedSiblings);
     });
-
-    const currentItemEntry = createEntry(item, depth, selectionState.get());
-
-    // Update selectionState (end)
-    itemSelection.each((selection) => {
-      if (Compare.eq(selection.end, item)) {
-        selectionState.set(false);
-      }
-    });
-
-    const childListEntries: Entry[] = Traverse.lastChild(item)
-      .filter(isList)
-      .map((list) => parseList(depth, itemSelection, selectionState, list))
-      .getOr([]);
-
-    return currentItemEntry.toArray().concat(childListEntries);
-  }, (list) => parseList(depth, itemSelection, selectionState, list));
 
 const parseList: Parser = (depth: number, itemSelection: Optional<ItemSelection>, selectionState: Cell<boolean>, list: SugarElement<HTMLElement>): Entry[] =>
   Arr.bind(Traverse.children(list), (element) => {

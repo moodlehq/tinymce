@@ -1,5 +1,5 @@
-import { Arr, Optionals } from '@ephox/katamari';
-import { Compare, PredicateFind, Remove, SugarElement, SugarNode } from '@ephox/sugar';
+import { Arr, Optional, Optionals } from '@ephox/katamari';
+import { Compare, ContentEditable, PredicateFind, Remove, SugarElement, SugarNode } from '@ephox/sugar';
 
 import DOMUtils from 'tinymce/core/api/dom/DOMUtils';
 import RangeUtils from 'tinymce/core/api/dom/RangeUtils';
@@ -61,9 +61,15 @@ const hasOnlyOneBlockChild = (dom: DOMUtils, elm: Element): boolean => {
   return childNodes.length === 1 && !NodeType.isListNode(childNodes[0]) && dom.isBlock(childNodes[0]);
 };
 
+const isUnwrappable = (node: Node | null): node is HTMLElement =>
+  Optional.from(node)
+    .map(SugarElement.fromDom)
+    .filter(SugarNode.isHTMLElement)
+    .exists((el) => ContentEditable.isEditable(el) && !Arr.contains([ 'details' ], SugarNode.name(el)));
+
 const unwrapSingleBlockChild = (dom: DOMUtils, elm: Element): void => {
-  if (hasOnlyOneBlockChild(dom, elm)) {
-    dom.remove(elm.firstChild as HTMLElement, true);
+  if (hasOnlyOneBlockChild(dom, elm) && isUnwrappable(elm.firstChild)) {
+    dom.remove(elm.firstChild, true);
   }
 };
 
@@ -165,8 +171,9 @@ const backspaceDeleteFromListToListCaret = (editor: Editor, isForward: boolean):
 
     const rng = ListRangeUtils.normalizeRange(selection.getRng());
     const otherLi = dom.getParent(findNextCaretContainer(editor, rng, isForward, root), 'LI', root) as HTMLLIElement;
+    const willMergeParentIntoChild = otherLi && (isForward ? dom.isChildOf(li, otherLi) : dom.isChildOf(otherLi, li));
 
-    if (otherLi && otherLi !== li) {
+    if (otherLi && otherLi !== li && !willMergeParentIntoChild) {
       editor.undoManager.transact(() => {
         if (isForward) {
           mergeForward(editor, rng, otherLi, li);
@@ -176,6 +183,19 @@ const backspaceDeleteFromListToListCaret = (editor: Editor, isForward: boolean):
           } else {
             mergeBackward(editor, rng, li, otherLi);
           }
+        }
+      });
+
+      return true;
+    } else if (willMergeParentIntoChild && !isForward && otherLi !== li) {
+      editor.undoManager.transact(() => {
+        if (rng.commonAncestorContainer.parentElement) {
+          const bookmark = Bookmark.createBookmark(rng);
+          const oldParentElRef = rng.commonAncestorContainer.parentElement;
+          moveChildren(dom, rng.commonAncestorContainer.parentElement, otherLi);
+          oldParentElRef.remove();
+          const resolvedBookmark = Bookmark.resolveBookmark(bookmark);
+          editor.selection.setRng(resolvedBookmark);
         }
       });
 
@@ -209,7 +229,7 @@ const backspaceDeleteIntoListCaret = (editor: Editor, isForward: boolean): boole
   const root = Selection.getClosestEditingHost(editor, selectionStartElm);
   const block = dom.getParent(selectionStartElm, dom.isBlock, root);
 
-  if (block && dom.isEmpty(block)) {
+  if (block && dom.isEmpty(block, undefined, { checkRootAsContent: true })) {
     const rng = ListRangeUtils.normalizeRange(editor.selection.getRng());
     const otherLi = dom.getParent(findNextCaretContainer(editor, rng, isForward, root), 'LI', root);
 
@@ -224,8 +244,9 @@ const backspaceDeleteIntoListCaret = (editor: Editor, isForward: boolean): boole
       }
 
       editor.undoManager.transact(() => {
+        const parentNode = otherLi.parentNode as HTMLElement;
         removeBlock(dom, block, root);
-        ToggleList.mergeWithAdjacentLists(dom, otherLi.parentNode as HTMLElement);
+        ToggleList.mergeWithAdjacentLists(dom, parentNode);
         editor.selection.select(otherLi, true);
         editor.selection.collapse(isForward);
       });

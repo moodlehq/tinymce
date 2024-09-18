@@ -4,15 +4,20 @@ import { Fun, Optional } from '@ephox/katamari';
 import Editor from 'tinymce/core/api/Editor';
 import { BlockFormat, InlineFormat } from 'tinymce/core/api/fmt/Format';
 
+import * as Events from '../../../api/Events';
 import { UiFactoryBackstage } from '../../../backstage/Backstage';
 import { updateMenuText } from '../../dropdown/CommonDropdown';
-import { onActionToggleFormat } from '../ControlUtils';
+import { onActionToggleFormat, onSetupEditableToggle } from '../ControlUtils';
 import { createMenuItems, createSelectButton, SelectSpec } from './BespokeSelect';
 import { buildBasicSettingsDataset, Delimiter } from './SelectDatasets';
 import { findNearest } from './utils/FormatDetection';
+import * as Tooltip from './utils/Tooltip';
+
+const menuTitle = 'Blocks';
+const getTooltipPlaceholder = Fun.constant('Block {0}');
+const fallbackFormat = 'Paragraph';
 
 const getSpec = (editor: Editor): SelectSpec => {
-  const fallbackFormat = 'Paragraph';
 
   const isSelectedFor = (format: string) => () => editor.formatter.match(format);
 
@@ -34,12 +39,13 @@ const getSpec = (editor: Editor): SelectSpec => {
     AlloyTriggers.emitWith(comp, updateMenuText, {
       text
     });
+    Events.fireBlocksTextUpdate(editor, { value: text });
   };
 
   const dataset = buildBasicSettingsDataset(editor, 'block_formats', Delimiter.SemiColon);
 
   return {
-    tooltip: 'Blocks',
+    tooltip: Tooltip.makeTooltipText(editor, getTooltipPlaceholder(), fallbackFormat),
     text: Optional.some(fallbackFormat),
     icon: Optional.none(),
     isSelectedFor,
@@ -54,13 +60,14 @@ const getSpec = (editor: Editor): SelectSpec => {
 };
 
 const createBlocksButton = (editor: Editor, backstage: UiFactoryBackstage): SketchSpec =>
-  createSelectButton(editor, backstage, getSpec(editor));
+  createSelectButton(editor, backstage, getSpec(editor), getTooltipPlaceholder, 'BlocksTextUpdate', 'blocks');
 
 // FIX: Test this!
 const createBlocksMenu = (editor: Editor, backstage: UiFactoryBackstage): void => {
-  const menuItems = createMenuItems(editor, backstage, getSpec(editor));
+  const menuItems = createMenuItems(backstage, getSpec(editor));
   editor.ui.registry.addNestedMenuItem('blocks', {
-    text: 'Blocks',
+    text: menuTitle,
+    onSetup: onSetupEditableToggle(editor),
     getSubmenuItems: () => menuItems.items.validateItems(menuItems.getStyleItems())
   });
 };

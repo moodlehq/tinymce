@@ -1,15 +1,16 @@
 import {
-  AddEventsBehaviour, AlloyComponent, AlloyEvents, AlloyParts, AlloySpec, Behaviour, Button, Container, DomFactory, Focusing, Keying, ModalDialog,
+  AddEventsBehaviour, AlloyComponent, AlloyEvents, AlloyParts, AlloySpec, Behaviour, Blocking, Button, Container, DomFactory, Focusing, Keying, ModalDialog,
   NativeEvents, SketchSpec, SystemEvents, Tabstopping
 } from '@ephox/alloy';
-import { Optional, Result } from '@ephox/katamari';
+import { Fun, Optional, Result } from '@ephox/katamari';
 import { Class, SugarBody } from '@ephox/sugar';
 
 import Env from 'tinymce/core/api/Env';
 
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import * as Backstage from '../../backstage/Backstage';
 import * as HtmlSanitizer from '../core/HtmlSanitizer';
 import * as NavigableObject from '../general/NavigableObject';
+import * as DialogChannels from '../window/DialogChannels';
 
 const isTouch = Env.deviceType.isTouch();
 
@@ -36,7 +37,7 @@ const defaultHeader = (title: AlloyParts.ConfiguredPart, close: AlloyParts.Confi
   ]
 });
 
-const pClose = (onClose: () => void, providersBackstage: UiFactoryBackstageProviders): AlloyParts.ConfiguredPart => ModalDialog.parts.close(
+const pClose = (onClose: () => void, providersBackstage: Backstage.UiFactoryBackstageProviders): AlloyParts.ConfiguredPart => ModalDialog.parts.close(
   // Need to find a way to make it clear in the docs whether parts can be sketches
   Button.sketch({
     dom: {
@@ -65,7 +66,7 @@ const pUntitled = (): AlloyParts.ConfiguredPart => ModalDialog.parts.title({
   }
 });
 
-const pBodyMessage = (message: string, providersBackstage: UiFactoryBackstageProviders): AlloyParts.ConfiguredPart => ModalDialog.parts.body({
+const pBodyMessage = (message: string, providersBackstage: Backstage.UiFactoryBackstageProviders): AlloyParts.ConfiguredPart => ModalDialog.parts.body({
   dom: {
     tag: 'div',
     classes: [ 'tox-dialog__body' ]
@@ -174,7 +175,12 @@ const renderDialog = (spec: DialogSpec): SketchSpec => {
           // Note: `runOnSource` here will only listen to the event at the outer component level.
           // Using just `run` instead will cause an infinite loop as `focusIn` would fire a `focusin` which would then get responded to and so forth.
           AlloyEvents.runOnSource(NativeEvents.focusin(), (comp, _se) => {
-            Keying.focusIn(comp);
+            Blocking.isBlocked(comp) ? Fun.noop() : Keying.focusIn(comp);
+          }),
+          AlloyEvents.run<SystemEvents.AlloyFocusShiftedEvent>(SystemEvents.focusShifted(), (comp, se) => {
+            comp.getSystem().broadcastOn([ DialogChannels.dialogFocusShiftedChannel ], {
+              newFocus: se.event.newFocus
+            });
           })
         ])),
         AddEventsBehaviour.config('scroll-lock', [

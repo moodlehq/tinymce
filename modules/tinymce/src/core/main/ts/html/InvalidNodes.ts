@@ -3,6 +3,7 @@ import { Fun } from '@ephox/katamari';
 import AstNode from '../api/html/Node';
 import Schema from '../api/html/Schema';
 import Tools from '../api/util/Tools';
+import * as AstNodeType from './AstNodeType';
 import { hasOnlyChild, isEmpty } from './ParserUtils';
 
 const removeOrUnwrapInvalidNode = (node: AstNode, schema: Schema, originalNodeParent: AstNode | null | undefined = node.parent) => {
@@ -21,13 +22,13 @@ const removeOrUnwrapInvalidNode = (node: AstNode, schema: Schema, originalNodePa
   }
 };
 
-const cleanInvalidNodes = (nodes: AstNode[], schema: Schema, onCreate: (newNode: AstNode) => void = Fun.noop): void => {
+const cleanInvalidNodes = (nodes: AstNode[], schema: Schema, rootNode: AstNode, onCreate: (newNode: AstNode) => void = Fun.noop): void => {
   const textBlockElements = schema.getTextBlockElements();
   const nonEmptyElements = schema.getNonEmptyElements();
   const whitespaceElements = schema.getWhitespaceElements();
-  const nonSplittableElements = Tools.makeMap('tr,td,th,tbody,thead,tfoot,table');
-
+  const nonSplittableElements = Tools.makeMap('tr,td,th,tbody,thead,tfoot,table,summary');
   const fixed = new Set<AstNode>();
+  const isSplittableElement = (node: AstNode) => node !== rootNode && !nonSplittableElements[node.name];
 
   for (let ni = 0; ni < nodes.length; ni++) {
     const node = nodes[ni];
@@ -64,15 +65,14 @@ const cleanInvalidNodes = (nodes: AstNode[], schema: Schema, onCreate: (newNode:
 
     // Get list of all parent nodes until we find a valid parent to stick the child into
     const parents = [ node ];
-    for (parent = node.parent; parent && !schema.isValidChild(parent.name, node.name) &&
-    !nonSplittableElements[parent.name]; parent = parent.parent) {
+    for (parent = node.parent; parent && !schema.isValidChild(parent.name, node.name) && isSplittableElement(parent); parent = parent.parent) {
       parents.push(parent);
     }
 
     // Found a suitable parent
     if (parent && parents.length > 1) {
       // If the node is a valid child of the parent, then try to move it. Otherwise unwrap it
-      if (schema.isValidChild(parent.name, node.name)) {
+      if (!isInvalid(schema, node, parent)) {
         // Reverse the array since it makes looping easier
         parents.reverse();
 
@@ -83,7 +83,7 @@ const cleanInvalidNodes = (nodes: AstNode[], schema: Schema, onCreate: (newNode:
         // Start cloning and moving children on the left side of the target node
         let currentNode = newParent;
         for (let i = 0; i < parents.length - 1; i++) {
-          if (schema.isValidChild(currentNode.name, parents[i].name)) {
+          if (schema.isValidChild(currentNode.name, parents[i].name) && i > 0) {
             tempNode = parents[i].clone();
             onCreate(tempNode);
             currentNode.append(tempNode);
@@ -160,17 +160,30 @@ const hasClosest = (node: AstNode, parentName: string): boolean => {
   return false;
 };
 
+// The `parent` parameter of `isInvalid` function represents the closest valid parent
+// under which the `node` is intended to be moved.
 const isInvalid = (schema: Schema, node: AstNode, parent: AstNode | null | undefined = node.parent): boolean => {
-  // Check if the node is a valid child of the parent node. If the child is
-  // unknown we don't collect it since it's probably a custom element
-  if (parent && schema.children[node.name] && !schema.isValidChild(parent.name, node.name)) {
-    return true;
-  // Anchors are a special case and cannot be nested
-  } else if (parent && node.name === 'a' && hasClosest(parent, 'a')) {
-    return true;
-  } else {
+  if (!parent) {
     return false;
   }
+
+  // Check if the node is a valid child of the parent node. If the child is
+  // unknown we don't collect it since it's probably a custom element
+  if (schema.children[node.name] && !schema.isValidChild(parent.name, node.name)) {
+    return true;
+  }
+
+  // Anchors are a special case and cannot be nested
+  if (node.name === 'a' && hasClosest(parent, 'a')) {
+    return true;
+  }
+
+  // heading element is valid if it is the only one child of summary
+  if (AstNodeType.isSummary(parent) && AstNodeType.isHeading(node)) {
+    return !(parent?.firstChild === node && parent?.lastChild === node);
+  }
+
+  return false;
 };
 
 export { cleanInvalidNodes, isInvalid };

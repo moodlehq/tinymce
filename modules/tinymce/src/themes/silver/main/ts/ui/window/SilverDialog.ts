@@ -1,48 +1,50 @@
-import { AlloyComponent, Composing, ModalDialog } from '@ephox/alloy';
+import { AlloyComponent, Composing, ModalDialog, Reflecting } from '@ephox/alloy';
 import { Dialog, DialogManager } from '@ephox/bridge';
-import { Fun, Id, Optional } from '@ephox/katamari';
-import { Class, Classes, SugarElement } from '@ephox/sugar';
+import { Cell, Fun, Id, Optional, Optionals } from '@ephox/katamari';
 
 import { UiFactoryBackstage } from '../../backstage/Backstage';
+import { dialogChannel } from './DialogChannels';
 import { renderModalBody } from './SilverDialogBody';
 import * as SilverDialogCommon from './SilverDialogCommon';
-import { SilverDialogEvents } from './SilverDialogEvents';
+import * as SilverDialogEvents from './SilverDialogEvents';
 import { renderModalFooter } from './SilverDialogFooter';
-import { DialogAccess, getDialogApi } from './SilverDialogInstanceApi';
+import * as SilverDialogInstanceApi from './SilverDialogInstanceApi';
 
 interface RenderedDialog<T extends Dialog.DialogData> {
   readonly dialog: AlloyComponent;
   readonly instanceApi: Dialog.DialogInstanceApi<T>;
 }
 
-const getDialogSizeClasses = (size: Dialog.DialogSize): string[] => {
-  switch (size) {
-    case 'large':
-      return [ 'tox-dialog--width-lg' ];
-    case 'medium':
-      return [ 'tox-dialog--width-md' ];
-    default:
-      return [];
-  }
-};
-
 const renderDialog = <T extends Dialog.DialogData>(dialogInit: DialogManager.DialogInit<T>, extra: SilverDialogCommon.WindowExtra<T>, backstage: UiFactoryBackstage): RenderedDialog<T> => {
   const dialogId = Id.generate('dialog');
   const internalDialog = dialogInit.internalDialog;
   const header = SilverDialogCommon.getHeader(internalDialog.title, dialogId, backstage);
 
+  const dialogSize = Cell<Dialog.DialogSize>(internalDialog.size);
+
+  const getCompByName = (name: string) => SilverDialogInstanceApi.getCompByName(modalAccess, name);
+
+  const dialogSizeClasses = SilverDialogCommon.getDialogSizeClass(dialogSize.get()).toArray();
+
+  const updateState = (comp: AlloyComponent, incoming: DialogManager.DialogInit<T>) => {
+    dialogSize.set(incoming.internalDialog.size);
+    SilverDialogCommon.updateDialogSizeClass(incoming.internalDialog.size, comp);
+    return Optional.some(incoming);
+  };
+
   const body = renderModalBody({
     body: internalDialog.body,
     initialData: internalDialog.initialData
-  }, dialogId, backstage);
+  }, dialogId, backstage, getCompByName);
 
   const storedMenuButtons = SilverDialogCommon.mapMenuButtons(internalDialog.buttons);
 
   const objOfCells = SilverDialogCommon.extractCellsToObject(storedMenuButtons);
 
-  const footer = renderModalFooter({
-    buttons: storedMenuButtons
-  }, dialogId, backstage);
+  const footer = Optionals.someIf(
+    storedMenuButtons.length !== 0,
+    renderModalFooter({ buttons: storedMenuButtons }, dialogId, backstage)
+  );
 
   const dialogEvents = SilverDialogEvents.initDialog<T>(
     () => instanceApi,
@@ -50,37 +52,32 @@ const renderDialog = <T extends Dialog.DialogData>(dialogInit: DialogManager.Dia
     backstage.shared.getSink
   );
 
-  const dialogSize = getDialogSizeClasses(internalDialog.size);
-
-  const spec = {
+  const spec: SilverDialogCommon.DialogSpec = {
     id: dialogId,
     header,
     body,
-    footer: Optional.some(footer),
-    extraClasses: dialogSize,
-    extraBehaviours: [],
+    footer,
+    extraClasses: dialogSizeClasses,
+    extraBehaviours: [
+      Reflecting.config({
+        channel: `${dialogChannel}-${dialogId}`,
+        updateState,
+        initialData: dialogInit
+      }),
+    ],
     extraStyles: {}
   };
 
-  const dialog: AlloyComponent = SilverDialogCommon.renderModalDialog(spec, dialogInit, dialogEvents, backstage);
+  const dialog: AlloyComponent = SilverDialogCommon.renderModalDialog(spec, dialogEvents, backstage);
 
-  const modalAccess = ((): DialogAccess => {
+  const modalAccess = ((): SilverDialogInstanceApi.DialogAccess => {
     const getForm = (): AlloyComponent => {
       const outerForm = ModalDialog.getBody(dialog);
       return Composing.getCurrent(outerForm).getOr(outerForm);
     };
 
     const toggleFullscreen = (): void => {
-      const fullscreenClass = 'tox-dialog--fullscreen';
-      const sugarBody = SugarElement.fromDom(dialog.element.dom);
-
-      if (!Class.has(sugarBody, fullscreenClass)) {
-        Classes.remove(sugarBody, dialogSize);
-        Class.add(sugarBody, fullscreenClass);
-      } else {
-        Class.remove(sugarBody, fullscreenClass);
-        Classes.add(sugarBody, dialogSize);
-      }
+      SilverDialogCommon.toggleFullscreen(dialog, dialogSize.get());
     };
 
     return {
@@ -94,7 +91,7 @@ const renderDialog = <T extends Dialog.DialogData>(dialogInit: DialogManager.Dia
   })();
 
   // TODO: Get the validator from the dialog state.
-  const instanceApi = getDialogApi<T>(modalAccess, extra.redial, objOfCells);
+  const instanceApi = SilverDialogInstanceApi.getDialogApi<T>(modalAccess, extra.redial, objOfCells);
 
   return {
     dialog,

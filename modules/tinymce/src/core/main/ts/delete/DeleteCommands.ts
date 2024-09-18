@@ -6,6 +6,7 @@ import * as BlockRangeDelete from './BlockRangeDelete';
 import * as CaretBoundaryDelete from './CaretBoundaryDelete';
 import * as CefDelete from './CefDelete';
 import * as DeleteUtils from './DeleteUtils';
+import * as DivDelete from './DivDelete';
 import * as ImageBlockDelete from './ImageBlockDelete';
 import * as InlineBoundaryDelete from './InlineBoundaryDelete';
 import * as InlineFormatDelete from './InlineFormatDelete';
@@ -25,6 +26,7 @@ const findAction = (editor: Editor, caret: Cell<Text | null>, forward: boolean) 
     MediaDelete.backspaceDelete,
     BlockRangeDelete.backspaceDelete,
     InlineFormatDelete.backspaceDelete,
+    DivDelete.backspaceDelete
   ], (item) => item(editor, forward))
     .filter((_) => editor.selection.isEditable());
 
@@ -35,8 +37,10 @@ const deleteCommand = (editor: Editor, caret: Cell<Text | null>): void => {
     () => {
       // We can't use an `execEditorDeleteCommand` here, otherwise we'd get
       // possible infinite recursion (as it would trigger `deleteCommand` again)
-      DeleteUtils.execNativeDeleteCommand(editor);
-      DeleteUtils.paddEmptyBody(editor);
+      if (editor.selection.isEditable()) {
+        DeleteUtils.execNativeDeleteCommand(editor);
+        DeleteUtils.paddEmptyBody(editor);
+      }
     },
     Fun.call
   );
@@ -46,7 +50,11 @@ const forwardDeleteCommand = (editor: Editor, caret: Cell<Text | null>): void =>
   const result = findAction(editor, caret, true);
 
   result.fold(
-    () => DeleteUtils.execNativeForwardDeleteCommand(editor),
+    () => {
+      if (editor.selection.isEditable()) {
+        DeleteUtils.execNativeForwardDeleteCommand(editor);
+      }
+    },
     Fun.call
   );
 };

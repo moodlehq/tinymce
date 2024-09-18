@@ -1,5 +1,6 @@
 import { describe, it } from '@ephox/bedrock-client';
-import { LegacyUnit, TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
+import { PlatformDetection } from '@ephox/sand';
+import { LegacyUnit, TinyApis, TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
 import Editor from 'tinymce/core/api/Editor';
@@ -8,6 +9,8 @@ import { ZWSP } from 'tinymce/core/text/Zwsp';
 import * as KeyUtils from '../module/test/KeyUtils';
 
 describe('browser.tinymce.core.FormatterRemoveTest', () => {
+  const browser = PlatformDetection.detect().browser;
+
   const hook = TinyHooks.bddSetupLight<Editor>({
     indent: false,
     extended_valid_elements: 'b[style],i,span[style|contenteditable|class]',
@@ -70,7 +73,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
     editor.selection.setRng(rng);
     editor.formatter.remove('format');
     assert.equal(getContent(editor), '<p><span style="color: #ff0000; font-weight: bold;">' +
-      '<em>1</em></span><span style="color: rgb(255, 0, 0);"><em>23</em></span>' +
+      '<em>1</em></span><span style="color: #ff0000;"><em>23</em></span>' +
       '<span style=\"color: #ff0000; font-weight: bold;\"><em>4' +
       '</em></span></p>', 'Inline element style where element is format root');
   });
@@ -109,7 +112,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
     editor.selection.setRng(rng);
     editor.formatter.remove('format');
     assert.equal(getContent(editor), '<p><span style="font-weight: bold;"><em><span style="color: #ff0000; font-weight: bold;">12</span>' +
-      '</em></span><em><span style="color: rgb(255, 0, 0);">34</span></em></p>', 'Partially selected inline element text with complex children');
+      '</em></span><em><span style="color: #ff0000;">34</span></em></p>', 'Partially selected inline element text with complex children');
   });
 
   it('Inline elements with exact flag', () => {
@@ -306,7 +309,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
     const editor = hook.editor();
     editor.setContent('<p><em><b>abc</b></em></p>');
     editor.formatter.register('format', { inline: 'b' });
-    LegacyUnit.setSelection(editor, 'b', 3, 'b', 3);
+    TinySelections.setCursor(editor, [ 0, 0 ], 1);
     editor.formatter.remove('format');
     KeyUtils.type(editor, 'd');
     TinyAssertions.assertContent(editor, '<p><em><b>abc</b>d</em></p>');
@@ -316,7 +319,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
     const editor = hook.editor();
     editor.setContent('<p><em><b>abc</b></em>e</p>');
     editor.formatter.register('format', { inline: 'b' });
-    LegacyUnit.setSelection(editor, 'b', 3, 'b', 3);
+    TinySelections.setCursor(editor, [ 0, 0 ], 1);
     editor.formatter.remove('format');
     KeyUtils.type(editor, 'd');
     TinyAssertions.assertContent(editor, '<p><em><b>abc</b>d</em>e</p>');
@@ -354,23 +357,32 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
 
   it('contentEditable: false on start and contentEditable: true on end', () => {
     const editor = hook.editor();
+    const initialContent = '<p>abc</p><p contenteditable="false"><b>def</b></p><p><b>ghj</b></p>';
     editor.formatter.register('format', { inline: 'b' });
-    editor.setContent('<p>abc</p><p contenteditable="false"><b>def</b></p><p><b>ghj</b></p>');
+    editor.setContent(initialContent);
     const rng = editor.dom.createRng();
     rng.setStart(editor.dom.select('b')[0].firstChild as Text, 0);
     rng.setEnd(editor.dom.select('b')[1].firstChild as Text, 3);
     editor.selection.setRng(rng);
     editor.formatter.remove('format');
-    assert.equal(editor.getContent(), '<p>abc</p><p contenteditable="false"><b>def</b></p><p>ghj</p>', 'Text in last paragraph is not bold');
+    TinyAssertions.assertContent(editor, initialContent);
   });
 
   it('contentEditable: true on start and contentEditable: false on end', () => {
     const editor = hook.editor();
+    const initialContent = '<p>abc</p><p><b>def</b></p><p contenteditable="false"><b>ghj</b></p>';
     editor.formatter.register('format', { inline: 'b' });
-    editor.setContent('<p>abc</p><p><b>def</b></p><p contenteditable="false"><b>ghj</b></p>');
+    editor.setContent(initialContent);
     LegacyUnit.setSelection(editor, 'p:nth-child(2) b', 0, 'p:last-of-type b', 3);
     editor.formatter.remove('format');
-    assert.equal(editor.getContent(), '<p>abc</p><p>def</p><p contenteditable="false"><b>ghj</b></p>', 'Text in first paragraph is not bold');
+    if (browser.isSafari()) {
+      // Safari 17 will not select the non-editable content
+      // Selection only covers editable "def" and removes format correctly
+      const expectedContent = '<p>abc</p><p>def</p><p contenteditable="false"><b>ghj</b></p>';
+      TinyAssertions.assertContent(editor, expectedContent);
+    } else {
+      TinyAssertions.assertContent(editor, initialContent);
+    }
   });
 
   it('contentEditable: true inside contentEditable: false', () => {
@@ -608,7 +620,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
   it('TINY-8755: Non-internal attributes are not removed', () => {
     const editor = hook.editor();
     // eslint-disable-next-line max-len
-    editor.setContent('<p><strong>bold<span data-field-type="TEXT"><span class="my-class-1"></span><span class="my-class-2"><span style="display: flex; align-items: flex-start;" data-mce-style="display: flex; align-items: flex-start;"><span class="my-class-3">' + ZWSP + '</span></span></span></span>text</strong></p>', { format: 'raw' });
+    TinyApis(editor).setRawContent('<p><strong>bold<span data-field-type="TEXT"><span class="my-class-1"></span><span class="my-class-2"><span style="display: flex; align-items: flex-start;" data-mce-style="display: flex; align-items: flex-start;"><span class="my-class-3">' + ZWSP + '</span></span></span></span>text</strong></p>');
     TinySelections.setSelection(editor, [ 0, 0, 0 ], 2, [ 0, 0, 2 ], 2);
     editor.formatter.remove('bold');
     // eslint-disable-next-line max-len

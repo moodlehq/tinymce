@@ -2,7 +2,7 @@ import { ApproxStructure, Keys } from '@ephox/agar';
 import { describe, it, context } from '@ephox/bedrock-client';
 import { Arr } from '@ephox/katamari';
 import { PlatformDetection } from '@ephox/sand';
-import { TinyAssertions, TinyContentActions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
+import { TinyApis, TinyAssertions, TinyContentActions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 
 import Editor from 'tinymce/core/api/Editor';
 import * as Zwsp from 'tinymce/core/text/Zwsp';
@@ -26,7 +26,7 @@ describe('browser.tinymce.core.delete.InlineFormatPostShortcutDeleteTest', () =>
   const metaBackspaceKeyup = (editor: Editor) => {
     // using Meta + Backspace workaround trigger as macOS suppresses most keyup events when meta is engaged
     // side effect of performing backspace keydown
-    TinyContentActions.keydown(editor, Keys.backspace());
+    TinyContentActions.keydown(editor, Keys.backspace(), { meta: true });
     // firefox detects macOS Command keycode as "Command" not "Meta"
     TinyContentActions.keyup(editor, browser.isFirefox() ? 224 : 91);
   };
@@ -313,7 +313,7 @@ describe('browser.tinymce.core.delete.InlineFormatPostShortcutDeleteTest', () =>
       Arr.each(shortcutDeleteScenariosNoMeta, (shortcutDeleteScenario) => {
         it(`Collapsed selection within an ancestor caret should not trigger caret refresh after ${shortcutDeleteScenario.name}`, () => {
           const editor = hook.editor();
-          editor.setContent('<p>a<span id="_mce_caret" data-mce-bogus="1" data-mce-type="format-caret"><strong>b' + Zwsp.ZWSP + '</strong></span>c</p>');
+          TinyApis(editor).setRawContent('<p>a<span id="_mce_caret" data-mce-bogus="1" data-mce-type="format-caret"><strong>b' + Zwsp.ZWSP + '</strong></span>c</p>');
           TinySelections.setCursor(editor, [ 0, 1, 0, 0 ], 'b'.length);
           shortcutDeleteScenario.fn(editor);
           assertStructureAndCursorAncestorCaret(editor);

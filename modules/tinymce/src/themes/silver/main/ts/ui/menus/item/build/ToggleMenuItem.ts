@@ -47,14 +47,15 @@ const renderToggleMenuItem = (
       onAction: spec.onAction,
       onSetup: spec.onSetup,
       triggersSubmenu: false,
-      itemBehaviours: [ ]
+      itemBehaviours: []
     }, structure, itemResponse, providersBackstage),
     {
       toggling: {
         toggleClass: ItemClasses.tickedClass,
         toggleOnExecute: false,
         selected: spec.active
-      }
+      },
+      role: spec.role.getOrUndefined()
     }
   );
 };

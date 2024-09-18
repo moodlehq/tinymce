@@ -1,6 +1,6 @@
 import { after, afterEach, before } from '@ephox/bedrock-client';
 import { Arr, Fun, Optional } from '@ephox/katamari';
-import { Insert, Remove, SugarBody, SugarElement, SugarShadowDom } from '@ephox/sugar';
+import { Insert, Remove, SugarBody, SugarElement } from '@ephox/sugar';
 
 import { Editor as EditorType } from '../../alien/EditorTypes';
 import * as Loader from '../../loader/Loader';
@@ -33,8 +33,8 @@ const setupHooks = <T extends EditorType = EditorType>(
   let hasFailure = false;
 
   before(function (done) {
-    // TINY-7039: Double the timeout as sometimes 2s wasn't enough for more complex editor loads
-    this.timeout(4000);
+    // The default timeout is 2s, that isn't enough on slow connections
+    this.timeout(10000);
     setup = setupElement();
     Loader.setup({
       preInit: (tinymce, settings) => {
@@ -99,11 +99,7 @@ const bddSetupInShadowRoot = <T extends EditorType = EditorType>(settings: Recor
   let editorDiv: Optional<SugarElement<HTMLElement>>;
   let teardown: () => void = Fun.noop;
 
-  before(function () {
-    if (!SugarShadowDom.isSupported()) {
-      this.skip();
-    }
-
+  before(() => {
     const shadowHost = SugarElement.fromTag('div', document);
 
     Insert.append(SugarBody.body(), shadowHost);

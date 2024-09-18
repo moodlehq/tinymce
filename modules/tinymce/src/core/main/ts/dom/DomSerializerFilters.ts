@@ -2,10 +2,10 @@ import { Arr, Optional } from '@ephox/katamari';
 
 import DOMUtils from '../api/dom/DOMUtils';
 import DomParser from '../api/html/DomParser';
-import Entities from '../api/html/Entities';
 import AstNode from '../api/html/Node';
 import * as Zwsp from '../text/Zwsp';
 import { DomSerializerSettings } from './DomSerializerImpl';
+import * as RemoveTrailingBr from './RemoveTrailingBr';
 
 declare const unescape: any;
 
@@ -78,17 +78,6 @@ const register = (htmlParser: DomParser, settings: DomSerializerSettings, dom: D
         } else {
           node.remove();
         }
-      }
-    }
-  });
-
-  htmlParser.addNodeFilter('noscript', (nodes) => {
-    let i = nodes.length;
-    while (i--) {
-      const node = nodes[i].firstChild;
-
-      if (node) {
-        node.value = Entities.decode(node.value ?? '');
       }
     }
   });
@@ -189,6 +178,13 @@ const register = (htmlParser: DomParser, settings: DomSerializerSettings, dom: D
       }
     }
   );
+
+  // Remove <br> at end of block elements Gecko and WebKit injects BR elements to
+  // make it possible to place the caret inside empty blocks. This logic tries to remove
+  // these elements and keep br elements that where intended to be there intact
+  if (settings.remove_trailing_brs) {
+    RemoveTrailingBr.addNodeFilter(settings, htmlParser, htmlParser.schema);
+  }
 };
 
 /**

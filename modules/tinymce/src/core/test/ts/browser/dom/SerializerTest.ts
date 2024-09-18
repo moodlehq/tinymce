@@ -4,7 +4,7 @@ import { assert } from 'chai';
 
 import DOMUtils from 'tinymce/core/api/dom/DOMUtils';
 import DomSerializer from 'tinymce/core/api/dom/Serializer';
-import * as TrimHtml from 'tinymce/core/dom/TrimHtml';
+import * as TrimBody from 'tinymce/core/dom/TrimBody';
 import * as Zwsp from 'tinymce/core/text/Zwsp';
 
 import * as ViewBlock from '../../module/test/ViewBlock';
@@ -16,15 +16,21 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
   const viewBlock = ViewBlock.bddSetup();
   viewBlock.get().id = 'test';
 
-  afterEach(() => {
-    viewBlock.update('');
-  });
-
   const setTestHtml = (html: string) =>
     DOM.setHTML('test', html);
 
   const getTestElement = () =>
     DOM.get('test') as HTMLElement;
+
+  const trim = (ser: DomSerializer, html: string) => {
+    const container = DOM.create('div', {}, html);
+    const trimmed = TrimBody.trim(container, ser.getTempAttrs());
+    return Zwsp.trim(trimmed.innerHTML);
+  };
+
+  afterEach(() => {
+    viewBlock.update('');
+  });
 
   it('Schema rules', () => {
     let ser = DomSerializer({ fix_list_elements: true });
@@ -308,6 +314,22 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
     assert.equal(ser.serialize(getTestElement()), '<p>test</p><p>&nbsp;</p>');
   });
 
+  it('TINY-9861: Pad empty elements with BR', () => {
+    const ser = DomSerializer({ pad_empty_with_br: true });
+
+    ser.setRules('#p,table,tr,#td,br');
+
+    setTestHtml('<p>a</p><p></p>');
+    assert.equal(ser.serialize(getTestElement()), '<p>a</p><p><br></p>');
+    setTestHtml('<p>a</p><table><tr><td><br></td></tr></table>');
+    assert.equal(ser.serialize(getTestElement()), '<p>a</p><table><tr><td><br></td></tr></table>');
+
+    // pad empty transparent <del> element with br
+    ser.setRules('-p,br,#del');
+    setTestHtml('<del><p></p><br></del>');
+    assert.equal(ser.serialize(getTestElement()), '<del><br></del>');
+  });
+
   it('Do not padd empty elements with padded children', () => {
     const ser = DomSerializer({ fix_list_elements: true });
 
@@ -334,9 +356,9 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
     assert.equal(ser.serialize(getTestElement()).replace(/\r/g, ''), '<s' + 'cript type="mylanguage"></s' + 'cript>');
   });
 
-  // TODO: TINY-4627/TINY-8363
-  it.skip('Script with tags inside a comment with element_format: xhtml', () => {
-    const ser = DomSerializer({ fix_list_elements: true, element_format: 'xhtml' });
+  it('Script with tags inside a comment with element_format: xhtml and sanitize: false', () => {
+    // TINY-8363: Disable sanitization to avoid DOMPurify false positive affecting expected output
+    const ser = DomSerializer({ fix_list_elements: true, element_format: 'xhtml', sanitize: false });
     ser.setRules('script[type|language|src]');
 
     setTestHtml('<s' + 'cript>// <img src="test"><a href="#"></a></s' + 'cript>');
@@ -346,9 +368,9 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
     );
   });
 
-  // TODO: TINY-4627/TINY-8363
-  it.skip('Script with tags inside a comment', () => {
-    const ser = DomSerializer({ fix_list_elements: true });
+  it('Script with tags inside a comment with sanitize: false', () => {
+    // TINY-8363: Disable sanitization to avoid DOMPurify false positive affecting expected output
+    const ser = DomSerializer({ fix_list_elements: true, sanitize: false });
     ser.setRules('script[type|language|src]');
 
     setTestHtml('<s' + 'cript>// <img src="test"><a href="#"></a></s' + 'cript>');
@@ -736,7 +758,7 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
 
     setTestHtml('<p data-x="1" data-y="2" data-z="3">a</p>');
     assert.equal(ser.serialize(getTestElement(), { getInner: 1 }), '<p data-z="3">a</p>');
-    assert.equal(TrimHtml.trimExternal(ser, '<p data-x="1" data-y="2" data-z="3">a</p>'), '<p data-z="3">a</p>');
+    assert.equal(trim(ser, '<p data-x="1" data-y="2" data-z="3">a</p>'), '<p data-z="3">a</p>');
   });
 
   it('addTempAttr same attr twice', () => {
@@ -748,9 +770,9 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
 
     setTestHtml('<p data-x="1" data-z="3">a</p>');
     assert.equal(ser1.serialize(getTestElement(), { getInner: 1 }), '<p data-z="3">a</p>');
-    assert.equal(TrimHtml.trimExternal(ser1, '<p data-x="1" data-z="3">a</p>'), '<p data-z="3">a</p>');
+    assert.equal(trim(ser1, '<p data-x="1" data-z="3">a</p>'), '<p data-z="3">a</p>');
     assert.equal(ser2.serialize(getTestElement(), { getInner: 1 }), '<p data-z="3">a</p>');
-    assert.equal(TrimHtml.trimExternal(ser2, '<p data-x="1" data-z="3">a</p>'), '<p data-z="3">a</p>');
+    assert.equal(trim(ser2, '<p data-x="1" data-z="3">a</p>'), '<p data-z="3">a</p>');
   });
 
   it('trim data-mce-bogus="all"', () => {
@@ -758,7 +780,7 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
 
     setTestHtml('a<p data-mce-bogus="all">b</p>c');
     assert.equal(ser.serialize(getTestElement(), { getInner: 1 }), 'ac');
-    assert.equal(TrimHtml.trimExternal(ser, 'a<p data-mce-bogus="all">b</p>c'), 'ac');
+    assert.equal(trim(ser, 'a<p data-mce-bogus="all">b</p>c'), 'ac');
   });
 
   it('zwsp should not be treated as contents', () => {
@@ -836,4 +858,69 @@ describe('browser.tinymce.core.dom.SerializerTest', () => {
       '<a href="#"><p>block</p></a>'
     );
   });
+
+  it('TINY-3909: Remove redundant br elements', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    setTestHtml( '<p>a<br></p>' +
+      '<p>a<br>b<br></p>' +
+      '<p>a<br><br></p><p>a<br><span data-mce-type="bookmark"></span><br></p>' +
+      '<p>a<span data-mce-type="bookmark"></span><br></p>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '<p>a</p><p>a<br>b</p><p>a<br><br></p><p>a<br><br></p><p>a</p>',
+      'Should remove redundant br elements');
+  });
+
+  it('TINY-3909: Replace br with nbsp when wrapped in two inline elements and one block element', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    setTestHtml('<p><strong><em><br /></em></strong></p>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '<p><strong><em>&nbsp;</em></strong></p>',
+      'Should replace br with nbsp');
+  });
+
+  it('TINY-3909: Replace br with nbsp when wrapped in an inline element and placed in the root', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    setTestHtml('<strong><br /></strong>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '<strong>&nbsp;</strong>',
+      'Should replace br with nbsp');
+  });
+
+  it('TINY-3909: Don\'t replace br inside root element when there is multiple brs', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    setTestHtml('<strong><br /><br /></strong>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '<strong><br><br></strong>',
+      'Should not replace br with nbsp');
+  });
+
+  it('TINY-3909: Don\'t replace br inside root element when there is siblings', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    setTestHtml('<strong><br /></strong><em>x</em>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '<strong><br></strong><em>x</em>',
+      'Should not replace br with nbsp');
+  });
+
+  it('TINY-3909: Remove br in invalid parent bug', () => {
+    const ser = DomSerializer({ remove_trailing_brs: true });
+
+    ser.setRules('br');
+    setTestHtml('<br>');
+    assert.equal(
+      ser.serialize(getTestElement(), { getInner: true }),
+      '',
+      'Should remove br');
+  });
 });
+

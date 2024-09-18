@@ -24,11 +24,10 @@ describe('browser.tinymce.core.focus.HighlightOnFocus', () => {
     assertIsHighlighted(editor);
   };
 
-  context('with highlight_on_focus: true', () => {
+  context('without highlight_on_focus option', () => {
     const hook = TinyHooks.bddSetup<Editor>({
       base_url: '/project/tinymce/js/tinymce',
-      toolbar: 'forecolor',
-      highlight_on_focus: true
+      toolbar: 'forecolor'
     }, []);
 
     before(() => {
@@ -73,7 +72,7 @@ describe('browser.tinymce.core.focus.HighlightOnFocus', () => {
     it('TINY-9277: Content area should be highlighted on focus and removed when shifted to toolbar', async () => {
       const editor = hook.editor();
       assertHighlightOnFocus(editor);
-      TinyUiActions.clickOnToolbar(editor, '[aria-label="Text color"] > .tox-tbtn + .tox-split-button__chevron');
+      TinyUiActions.clickOnToolbar(editor, '[aria-label^="Text color"] > .tox-tbtn + .tox-split-button__chevron');
       await TinyUiActions.pWaitForUi(editor, '.tox-swatches');
       await pAssertIsNotHighlighted(editor);
       TinyUiActions.keyup(editor, Keys.escape());
@@ -131,9 +130,10 @@ describe('browser.tinymce.core.focus.HighlightOnFocus', () => {
     });
   });
 
-  context('without highlight_on_focus option', () => {
+  context('with highlight_on_focus: false', () => {
     const hook = TinyHooks.bddSetup<Editor>({
-      base_url: '/project/tinymce/js/tinymce'
+      base_url: '/project/tinymce/js/tinymce',
+      highlight_on_focus: false
     });
 
     it('TINY-9277: Content area should not be highlighted on focus', () => {

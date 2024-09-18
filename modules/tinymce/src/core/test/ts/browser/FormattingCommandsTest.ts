@@ -1,5 +1,5 @@
 import { context, describe, it } from '@ephox/bedrock-client';
-import { LegacyUnit, TinyAssertions, TinyHooks } from '@ephox/wrap-mcagar';
+import { LegacyUnit, TinyAssertions, TinyHooks, TinySelections, TinyState } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
 import Editor from 'tinymce/core/api/Editor';
@@ -75,17 +75,17 @@ describe('browser.tinymce.core.FormattingCommandsTest', () => {
     editor.setContent('test 123');
     editor.execCommand('SelectAll');
     editor.execCommand('ForeColor', false, '#FF0000');
-    TinyAssertions.assertContent(editor, '<p><span style="color: rgb(255, 0, 0);">test 123</span></p>');
+    TinyAssertions.assertContent(editor, '<p><span style="color: #ff0000;">test 123</span></p>');
 
     editor.setContent('test 123');
     editor.execCommand('SelectAll');
     editor.execCommand('HiliteColor', false, '#FF0000');
-    TinyAssertions.assertContent(editor, '<p><span style="background-color: rgb(255, 0, 0);">test 123</span></p>');
+    TinyAssertions.assertContent(editor, '<p><span style="background-color: #ff0000;">test 123</span></p>');
 
     editor.setContent('test 123');
     editor.execCommand('SelectAll');
     editor.execCommand('BackColor', false, '#FF0000');
-    TinyAssertions.assertContent(editor, '<p><span style="background-color: rgb(255, 0, 0);">test 123</span></p>');
+    TinyAssertions.assertContent(editor, '<p><span style="background-color: #ff0000;">test 123</span></p>');
 
     editor.setContent('<p><span style="text-decoration: underline;">test 123</span></p>');
     TinyAssertions.assertContent(editor, '<p><span style="text-decoration: underline;">test 123</span></p>');
@@ -437,6 +437,15 @@ describe('browser.tinymce.core.FormattingCommandsTest', () => {
     editor.execCommand('SelectAll');
     editor.execCommand('unlink');
     TinyAssertions.assertContent(editor, '<p>test</p><div><p>test</p></div>');
+  });
+
+  it('TINY-9739: Removing link should be a noop for noneditable selections', () => {
+    TinyState.withNoneditableRootEditor(hook.editor(), (editor) => {
+      editor.setContent('<p><a href="#">tiny</a></p>');
+      TinySelections.setSelection(editor, [ 0, 0, 0 ], 1, [ 0, 0, 0 ], 3);
+      editor.execCommand('unlink');
+      TinyAssertions.assertContent(editor, '<p><a href="#">tiny</a></p>');
+    });
   });
 
   it('subscript/superscript', () => {

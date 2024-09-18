@@ -14,7 +14,7 @@ const each = Tools.each;
 
 const mergeTextDecorationsAndColor = (dom: DOMUtils, format: ApplyFormat, vars: FormatVars | undefined, node: Node): void => {
   const processTextDecorationsAndColor = (n: Node) => {
-    if (NodeType.isElement(n) && NodeType.isElement(n.parentNode) && FormatUtils.isEditable(n)) {
+    if (NodeType.isHTMLElement(n) && NodeType.isElement(n.parentNode) && dom.isEditable(n)) {
       const parentTextDecoration = FormatUtils.getTextDecoration(dom, n.parentNode);
       if (dom.getStyle(n, 'color') && parentTextDecoration) {
         dom.setStyle(n, 'text-decoration', parentTextDecoration);
@@ -36,7 +36,7 @@ const mergeBackgroundColorAndFontSize = (dom: DOMUtils, format: ApplyFormat, var
   if (format.styles && format.styles.backgroundColor) {
     const hasFontSize = hasStyle(dom, 'fontSize');
     processChildElements(node,
-      (elm) => hasFontSize(elm) && FormatUtils.isEditable(elm),
+      (elm) => hasFontSize(elm) && dom.isEditable(elm),
       applyStyle(dom, 'backgroundColor', FormatUtils.replaceVars(format.styles.backgroundColor, vars))
     );
   }
@@ -47,11 +47,11 @@ const mergeSubSup = (dom: DOMUtils, format: ApplyFormat, vars: FormatVars | unde
   if (FormatUtils.isInlineFormat(format) && (format.inline === 'sub' || format.inline === 'sup')) {
     const hasFontSize = hasStyle(dom, 'fontSize');
     processChildElements(node,
-      (elm) => hasFontSize(elm) && FormatUtils.isEditable(elm),
+      (elm) => hasFontSize(elm) && dom.isEditable(elm),
       applyStyle(dom, 'fontSize', '')
     );
 
-    const inverseTagDescendants = Arr.filter(dom.select(format.inline === 'sup' ? 'sub' : 'sup', node), FormatUtils.isEditable);
+    const inverseTagDescendants = Arr.filter(dom.select(format.inline === 'sup' ? 'sub' : 'sup', node), dom.isEditable);
     dom.remove(inverseTagDescendants, true);
   }
 };
@@ -66,7 +66,7 @@ const mergeWithChildren = (editor: Editor, formatList: ApplyFormat[], vars: Form
     if (FormatUtils.isInlineFormat(format)) {
       each(editor.dom.select(format.inline, node), (child) => {
         if (isElementNode(child)) {
-          RemoveFormat.removeFormat(editor, format, vars, child, format.exact ? child : null);
+          RemoveFormat.removeNodeFormat(editor, format, vars, child, format.exact ? child : null);
         }
       });
     }
@@ -80,7 +80,7 @@ const mergeWithParents = (editor: Editor, format: ApplyFormat, name: string, var
   // Note: RemoveFormat.removeFormat will not remove formatting from noneditable nodes
   const parentNode = node.parentNode;
   if (MatchFormat.matchNode(editor, parentNode, name, vars)) {
-    if (RemoveFormat.removeFormat(editor, format, vars, node)) {
+    if (RemoveFormat.removeNodeFormat(editor, format, vars, node)) {
       return;
     }
   }
@@ -89,7 +89,7 @@ const mergeWithParents = (editor: Editor, format: ApplyFormat, name: string, var
   if (format.merge_with_parents && parentNode) {
     editor.dom.getParent(parentNode, (parent) => {
       if (MatchFormat.matchNode(editor, parent, name, vars)) {
-        RemoveFormat.removeFormat(editor, format, vars, node);
+        RemoveFormat.removeNodeFormat(editor, format, vars, node);
         return true;
       } else {
         return false;

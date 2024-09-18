@@ -133,7 +133,7 @@ const findBlockEndPoint = (dom: DOMUtils, formatList: Format[], container: Node,
 
   // Expand to first wrappable block element or any block element
   if (!node) {
-    const scopeRoot = dom.getParent(container, 'LI,TD,TH') ?? root;
+    const scopeRoot = dom.getParent(container, 'LI,TD,TH,SUMMARY') ?? root;
     node = dom.getParent(
       NodeType.isText(container) ? container.parentNode : container,
       // Fixes #6183 where it would expand to editable parent element in inline mode
@@ -333,10 +333,16 @@ const expandRng = (dom: DOMUtils, rng: Range, formatList: Format[], includeTrail
     if (FormatUtils.isBlockFormat(format)) {
       if (!dom.isBlock(startContainer)) {
         startContainer = findParentContainer(dom, formatList, startContainer, startOffset, true);
+        if (NodeType.isText(startContainer)) {
+          startOffset = 0;
+        }
       }
 
       if (!dom.isBlock(endContainer)) {
         endContainer = findParentContainer(dom, formatList, endContainer, endOffset, false);
+        if (NodeType.isText(endContainer)) {
+          endOffset = endContainer.data.length;
+        }
       }
     }
   }
