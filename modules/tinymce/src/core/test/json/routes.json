@@ -202,28 +202,28 @@
   {
     "request": {
       "method": "get",
-      "path": "/custom/video.mp4"
+      "path": "/custom/tinymce/video.mp4"
     },
 
     "response": {
       "headers": {
         "content-type": "video/mp4"
       },
-      "binary_file": "../assets/media/video.mp4"
+      "binary_file": "./../assets/media/video.mp4"
     }
   },
 
   {
     "request": {
       "method": "get",
-      "path": "/custom/audio.mp3"
+      "path": "/custom/tinymce/audio.mp3"
     },
 
     "response": {
       "headers": {
         "content-type": "audio/mpeg"
       },
-      "binary_file": "../assets/media/audio.mp3"
+      "binary_file": "./../assets/media/audio.mp3"
     }
   },
 
