@@ -4,7 +4,8 @@ import { Focus, SugarElement } from '@ephox/sugar';
 import * as EditorView from '../EditorView';
 import * as EditorFocus from '../focus/EditorFocus';
 import NotificationManagerImpl from '../ui/NotificationManagerImpl';
-import Editor from './Editor';
+
+import type Editor from './Editor';
 import * as Options from './Options';
 
 export interface NotificationManagerImpl {
@@ -176,7 +177,7 @@ const NotificationManager = (editor: Editor): NotificationManager => {
      * @method open
      * @param {Object} args A <code>name: value</code> collection containing settings such as: <code>timeout</code>, <code>type</code>, and message (<code>text</code>).
      * <br /><br />
-     * For information on the available settings, see: <a href="https://www.tiny.cloud/docs/tinymce/7/creating-custom-notifications/">Create custom notifications</a>.
+     * For information on the available settings, see: <a href="https://www.tiny.cloud/docs/tinymce/8/creating-custom-notifications/">Create custom notifications</a>.
      */
     open,
 

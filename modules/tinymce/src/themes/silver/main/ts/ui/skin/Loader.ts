@@ -2,13 +2,14 @@ import { Fun, Optional, Optionals, Type } from '@ephox/katamari';
 import { SugarElement, SugarShadowDom } from '@ephox/sugar';
 
 import DOMUtils from 'tinymce/core/api/dom/DOMUtils';
-import StyleSheetLoader from 'tinymce/core/api/dom/StyleSheetLoader';
-import Editor from 'tinymce/core/api/Editor';
-import { TinyMCE } from 'tinymce/core/api/Tinymce';
+import type StyleSheetLoader from 'tinymce/core/api/dom/StyleSheetLoader';
+import type Editor from 'tinymce/core/api/Editor';
+import type { TinyMCE } from 'tinymce/core/api/Tinymce';
 
 declare let tinymce: TinyMCE;
 
 import * as Options from '../../api/Options';
+
 import * as SkinLoaded from './SkinLoaded';
 
 type CSSDecision = {

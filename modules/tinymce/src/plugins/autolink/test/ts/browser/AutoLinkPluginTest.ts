@@ -4,9 +4,9 @@ import { LegacyUnit, TinyAssertions, TinyHooks, TinySelections } from '@ephox/wr
 import { assert } from 'chai';
 import fc from 'fast-check';
 
-import Editor from 'tinymce/core/api/Editor';
-import { ExecCommandEvent } from 'tinymce/core/api/EventTypes';
-import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
+import type Editor from 'tinymce/core/api/Editor';
+import type { ExecCommandEvent } from 'tinymce/core/api/EventTypes';
+import type { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
 import Plugin from 'tinymce/plugins/autolink/Plugin';
 
 import * as KeyUtils from '../module/test/KeyUtils';
@@ -201,6 +201,14 @@ describe('browser.tinymce.plugins.autolink.AutoLinkPluginTest', () => {
     TinySelections.setCursor(editor, [ 0, 0, 0, 0 ], 23);
     KeyUtils.type(editor, ' ');
     TinyAssertions.assertContent(editor, '<p><a href="https://www.domain.com/"><strong>https://www.domain.com/&nbsp;</strong></a></p>');
+  });
+
+  it('TINY-11836: Should not create links if the content is already a link or part of it.', () => {
+    const editor = hook.editor();
+    editor.setContent('<p><a href="https://www.domain.com/" target="_blank" rel="noopener">www.domain.com</a></p>');
+    TinySelections.setCursor(editor, [ 0 ], 1);
+    KeyUtils.type(editor, '\n');
+    TinyAssertions.assertContent(editor, '<p><a href="https://www.domain.com/" target="_blank" rel="noopener">www.domain.com</a></p><p>&nbsp;</p>');
   });
 
   it('TINY-8091: should trigger when typing in the middle of brackets', () => {

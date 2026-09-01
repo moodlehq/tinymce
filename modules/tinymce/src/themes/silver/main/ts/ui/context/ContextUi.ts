@@ -1,9 +1,9 @@
 import {
-  AddEventsBehaviour, AlloyComponent, AlloyEvents, AlloySpec, AlloyTriggers, Behaviour, CustomEvent, GuiFactory, InlineView, Keying, NativeEvents,
-  SketchSpec
+  AddEventsBehaviour, type AlloyComponent, AlloyEvents, type AlloySpec, AlloyTriggers, Behaviour, type CustomEvent, GuiFactory, InlineView, Keying, NativeEvents,
+  type SketchSpec
 } from '@ephox/alloy';
 import { Arr, Cell, Id, Optional, Result } from '@ephox/katamari';
-import { Class, Css, EventArgs, Focus, SugarElement, SugarShadowDom, Width } from '@ephox/sugar';
+import { Class, Compare, Css, type EventArgs, Focus, type SugarElement, SugarShadowDom, Width } from '@ephox/sugar';
 
 import * as ContextToolbarFocus from './ContextToolbarFocus';
 
@@ -28,12 +28,18 @@ interface ContextToolbarSpec {
   readonly sink: AlloyComponent;
   readonly onHide: () => void;
   readonly onBack: () => void;
+  readonly focusElement: (el: SugarElement<HTMLElement>) => void;
 }
 
-const renderContextToolbar = (spec: ContextToolbarSpec): SketchSpec => {
+export interface ContextToolbarRenderResult {
+  readonly sketch: SketchSpec;
+  readonly inSubtoolbar: () => boolean;
+}
+
+const renderContextToolbar = (spec: ContextToolbarSpec): ContextToolbarRenderResult => {
   const stack = Cell<Array<{ bar: AlloyComponent; focus: Optional<SugarElement<HTMLElement>> }>>([ ]);
 
-  return InlineView.sketch({
+  const sketch = InlineView.sketch({
     dom: {
       tag: 'div',
       classes: [ 'tox-pop' ]
@@ -52,6 +58,7 @@ const renderContextToolbar = (spec: ContextToolbarSpec): SketchSpec => {
     },
 
     onHide: () => {
+      stack.set([ ]);
       spec.onHide();
     },
 
@@ -70,6 +77,7 @@ const renderContextToolbar = (spec: ContextToolbarSpec): SketchSpec => {
           Css.remove(elem, 'width');
 
           const currentWidth = Width.get(elem);
+          const hadFocus = Focus.search(comp.element).isSome();
 
           // Remove these so that we can property measure the width of the context form content
           Css.remove(elem, 'left');
@@ -89,13 +97,21 @@ const renderContextToolbar = (spec: ContextToolbarSpec): SketchSpec => {
           Css.set(elem, 'width', currentWidth + 'px');
 
           se.event.focus.fold(
-            () => ContextToolbarFocus.focusIn(comp),
-            (f) => {
-              Focus.focus(f);
-
-              if (Focus.search(elem).isNone()) {
+            () => {
+              if (hadFocus) {
                 ContextToolbarFocus.focusIn(comp);
               }
+            },
+            (f) => {
+              Focus.active(SugarShadowDom.getRootNode(comp.element)).fold(
+                () => Focus.focus(f),
+                (active) => {
+                  // We need this extra check since if the focus is aleady on the iframe we don't want to call focus on it again since that closes the context toolbar
+                  if (!Compare.eq(active, f)) {
+                    spec.focusElement(f);
+                  }
+                }
+              );
             }
           );
 
@@ -149,6 +165,10 @@ const renderContextToolbar = (spec: ContextToolbarSpec): SketchSpec => {
     lazySink: () => Result.value(spec.sink)
   });
 
+  return {
+    sketch,
+    inSubtoolbar: () => stack.get().length > 0
+  };
 };
 
 export {

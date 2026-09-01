@@ -6,10 +6,10 @@ import { Scroll } from '@ephox/sugar';
 import { TinyDom, LegacyUnit, TinyAssertions, TinyContentActions, TinyHooks, TinySelections, TinyApis } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
-import { AddUndoEvent } from 'tinymce/core/api/EventTypes';
-import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
-import { UndoLevel } from 'tinymce/core/undo/UndoManagerTypes';
+import type Editor from 'tinymce/core/api/Editor';
+import type { AddUndoEvent } from 'tinymce/core/api/EventTypes';
+import type { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
+import type { UndoLevel } from 'tinymce/core/undo/UndoManagerTypes';
 
 import * as HtmlUtils from '../module/test/HtmlUtils';
 import * as KeyUtils from '../module/test/KeyUtils';
@@ -368,7 +368,7 @@ describe('browser.tinymce.core.UndoManagerTest', () => {
     });
 
     editor.setContent('<p>c</p>');
-    editor.undoManager.add(undefined, { data: 1 });
+    editor.undoManager.add(undefined, { data: 1 } as any);
 
     assert.equal(HtmlUtils.cleanHtml(lastEvt?.lastLevel?.content ?? ''), '<p>b</p>');
     assert.equal(HtmlUtils.cleanHtml(lastEvt?.level?.content ?? ''), '<p>c</p>');

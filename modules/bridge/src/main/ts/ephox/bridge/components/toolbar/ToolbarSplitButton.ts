@@ -1,21 +1,22 @@
 import { FieldSchema, StructureSchema } from '@ephox/boulder';
-import { Optional, Result } from '@ephox/katamari';
+import type { Optional, Result } from '@ephox/katamari';
 
-import { ChoiceMenuItemSpec, SeparatorMenuItemSpec } from '../../api/Menu';
+import type { ChoiceMenuItemSpec, ImageMenuItemSpec, SeparatorMenuItemSpec } from '../../api/Menu';
 import * as ComponentSchema from '../../core/ComponentSchema';
 
 // Temporarily disable separators until things are clearer
-export type ToolbarSplitButtonItemTypes = ChoiceMenuItemSpec | SeparatorMenuItemSpec;
+export type ToolbarSplitButtonItemTypes = ChoiceMenuItemSpec | SeparatorMenuItemSpec | ImageMenuItemSpec;
 export type SuccessCallback = (menu: ToolbarSplitButtonItemTypes[]) => void;
 export type SelectPredicate = (value: string) => boolean;
 
-export type PresetTypes = 'color' | 'normal' | 'listpreview';
-export type PresetItemTypes = 'color' | 'normal';
+export type PresetTypes = 'color' | 'normal' | 'listpreview' | 'imageselector';
+export type PresetItemTypes = 'color' | 'img' | 'normal';
 export type ColumnTypes = number | 'auto';
 
 export interface ToolbarSplitButtonSpec {
   type?: 'splitbutton';
   tooltip?: string;
+  chevronTooltip?: string;
   icon?: string;
   text?: string;
   select?: SelectPredicate;
@@ -31,6 +32,7 @@ export interface ToolbarSplitButtonSpec {
 export interface ToolbarSplitButton {
   type: 'splitbutton';
   tooltip: Optional<string>;
+  chevronTooltip: Optional<string>;
   icon: Optional<string>;
   text: Optional<string>;
   select: Optional<SelectPredicate>;
@@ -57,6 +59,7 @@ export interface ToolbarSplitButtonInstanceApi {
 export const splitButtonSchema = StructureSchema.objOf([
   ComponentSchema.type,
   ComponentSchema.optionalTooltip,
+  ComponentSchema.optionalChevronTooltip,
   ComponentSchema.optionalIcon,
   ComponentSchema.optionalText,
   ComponentSchema.optionalSelect,

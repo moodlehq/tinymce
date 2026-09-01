@@ -1,8 +1,8 @@
 import { Arr, Obj, Type } from '@ephox/katamari';
 
-import Editor from 'tinymce/core/api/Editor';
-import { NodeChangeEvent } from 'tinymce/core/api/EventTypes';
-import { Menu, Toolbar } from 'tinymce/core/api/ui/Ui';
+import type Editor from 'tinymce/core/api/Editor';
+import type { NodeChangeEvent } from 'tinymce/core/api/EventTypes';
+import type { Menu, Toolbar } from 'tinymce/core/api/ui/Ui';
 import Tools from 'tinymce/core/api/util/Tools';
 
 import * as Options from '../api/Options';
@@ -46,13 +46,14 @@ const addSplitButton = (editor: Editor, id: string, tooltip: string, cmd: string
 
   editor.ui.registry.addSplitButton(id, {
     tooltip,
+    chevronTooltip: `${tooltip} menu`,
     icon: nodeName === ListType.OrderedList ? 'ordered-list' : 'unordered-list',
     presets: 'listpreview',
-    columns: 3,
+    columns: nodeName === ListType.OrderedList ? 3 : 4,
     fetch: (callback) => {
       const items = Tools.map(styles, (styleValue): Menu.ChoiceMenuItemSpec => {
         const iconStyle = nodeName === ListType.OrderedList ? 'num' : 'bull';
-        const iconName = styleValue === 'disc' || styleValue === 'decimal' ? 'default' : styleValue;
+        const iconName = styleValue === 'decimal' ? 'default' : styleValue;
         const itemValue = normalizeStyleValue(styleValue);
         const displayText = styleValueToText(styleValue);
         return {

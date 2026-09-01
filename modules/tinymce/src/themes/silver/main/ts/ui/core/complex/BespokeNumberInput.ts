@@ -1,17 +1,18 @@
-import { Keys } from '@ephox/agar';
-import { AddEventsBehaviour, AlloyComponent, AlloyEvents, AlloySpec, Behaviour, Button, Disabling, Focusing, FocusInsideModes, Input, Keying, Memento, NativeEvents, Representing, SystemEvents, Tooltipping } from '@ephox/alloy';
+import { AddEventsBehaviour, type AlloyComponent, AlloyEvents, type AlloySpec, Behaviour, Button, Disabling, Focusing, FocusInsideModes, Input, Keying, Memento, NativeEvents, Representing, SystemEvents, Tooltipping } from '@ephox/alloy';
 import { Arr, Cell, Fun, Id, Optional, Type } from '@ephox/katamari';
 import { Focus, SugarElement, Traverse } from '@ephox/sugar';
 
-import Editor from 'tinymce/core/api/Editor';
-import { UiFactoryBackstage } from 'tinymce/themes/silver/backstage/Backstage';
+import type Editor from 'tinymce/core/api/Editor';
+import VK from 'tinymce/core/api/util/VK';
+import type { UiFactoryBackstage } from 'tinymce/themes/silver/backstage/Backstage';
 
 import * as Options from '../../../api/Options';
 import { renderIconFromPack } from '../../button/ButtonSlices';
 import { onControlAttached, onControlDetached } from '../../controls/Controls';
-import { updateMenuText, UpdateMenuTextEvent } from '../../dropdown/CommonDropdown';
+import { updateMenuText, type UpdateMenuTextEvent } from '../../dropdown/CommonDropdown';
 import { onSetupEvent } from '../ControlUtils';
-import { NumberInputSpec } from './FontSizeBespoke';
+
+import type { NumberInputSpec } from './FontSizeBespoke';
 
 interface BespokeSelectApi {
   readonly getComponent: () => AlloyComponent;
@@ -109,7 +110,7 @@ const createBespokeNumberInput = (editor: Editor, backstage: UiFactoryBackstage,
           onControlAttached({ onSetup, getApi }, editorOffCellStepButton),
           onControlDetached({ getApi }, editorOffCellStepButton),
           AlloyEvents.run(NativeEvents.keydown(), (comp, se) => {
-            if (se.event.raw.keyCode === Keys.space() || se.event.raw.keyCode === Keys.enter()) {
+            if (se.event.raw.keyCode === VK.SPACEBAR || se.event.raw.keyCode === VK.ENTER) {
               if (!Disabling.isDisabled(comp)) {
                 action(false);
               }

@@ -6,16 +6,16 @@ import { Attribute, Class } from '@ephox/sugar';
 import * as AddEventsBehaviour from 'ephox/alloy/api/behaviour/AddEventsBehaviour';
 import * as Behaviour from 'ephox/alloy/api/behaviour/Behaviour';
 import { Representing } from 'ephox/alloy/api/behaviour/Representing';
-import { AlloyComponent } from 'ephox/alloy/api/component/ComponentApi';
+import type { AlloyComponent } from 'ephox/alloy/api/component/ComponentApi';
 import * as GuiFactory from 'ephox/alloy/api/component/GuiFactory';
-import { AlloySpec } from 'ephox/alloy/api/component/SpecTypes';
+import type { AlloySpec } from 'ephox/alloy/api/component/SpecTypes';
 import * as AlloyEvents from 'ephox/alloy/api/events/AlloyEvents';
 import * as AlloyTriggers from 'ephox/alloy/api/events/AlloyTriggers';
 import * as NativeEvents from 'ephox/alloy/api/events/NativeEvents';
-import * as GuiSetup from 'ephox/alloy/api/testhelpers/GuiSetup';
 import { FormCoupledInputs } from 'ephox/alloy/api/ui/FormCoupledInputs';
 import { FormField } from 'ephox/alloy/api/ui/FormField';
 import { Input } from 'ephox/alloy/api/ui/Input';
+import * as GuiSetup from 'ephox/alloy/test/GuiSetup';
 
 interface MakeConfig {
   className: string;

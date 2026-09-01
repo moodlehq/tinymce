@@ -1,10 +1,10 @@
-import { ApproxStructure, StructAssert, Waiter } from '@ephox/agar';
+import { ApproxStructure, type StructAssert, Waiter } from '@ephox/agar';
 import { context, describe, it } from '@ephox/bedrock-client';
 import { Type, Unicode } from '@ephox/katamari';
 import { PlatformDetection } from '@ephox/sand';
 import { TinyAssertions, TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import Plugin from 'tinymce/plugins/accordion/Plugin';
 
 import * as AccordionUtils from '../module/AccordionUtils';
@@ -43,12 +43,12 @@ describe('browser.tinymce.plugins.accordion.FilterContentTest', () => {
         s.element('summary', {
           exactClasses: [ 'mce-accordion-summary' ],
           children: [
-            ApproxStructure.fromHtml(summary || 'Accordion summary...')
+            ApproxStructure.fromHtml(summary || 'Accordion summary…')
           ]
         }),
         s.element('div', {
           exactClasses: [ 'mce-accordion-body' ],
-          children: (body ?? [ '<p>Accordion body...</p>' ]).map((html) => ApproxStructure.fromHtml(html))
+          children: (body ?? [ '<p>Accordion body…</p>' ]).map((html) => ApproxStructure.fromHtml(html))
         })
       ]
     });
@@ -363,9 +363,9 @@ describe('browser.tinymce.plugins.accordion.FilterContentTest', () => {
       TinySelections.setCursor(editor, [ 0, 0 ], 0);
 
       editor.execCommand('InsertAccordion');
-      TinyAssertions.assertCursor(editor, [ 0, 0, 0 ], 'Accordion summary...'.length);
+      TinyAssertions.assertCursor(editor, [ 0, 0, 0 ], 'Accordion summary…'.length);
 
-      TinySelections.setSelection(editor, [ 0, 0, 0 ], 0, [ 0, 0, 0 ], 'Accordion summary...'.length);
+      TinySelections.setSelection(editor, [ 0, 0, 0 ], 0, [ 0, 0, 0 ], 'Accordion summary…'.length);
       editor.execCommand('Delete');
       TinyAssertions.assertContent(editor, AccordionUtils.createAccordion({ summary: '&nbsp;' }));
     });

@@ -1,11 +1,13 @@
-import Editor from '../api/Editor';
+import type Editor from '../api/Editor';
 import * as Options from '../api/Options';
+import type { EditorEvent } from '../api/util/EventDispatcher';
 import Tools from '../api/util/Tools';
 import * as GetBookmark from '../bookmark/GetBookmark';
+
 import * as Levels from './Levels';
 import { isUnlocked } from './Locks';
 import { endTyping, setTyping } from './TypingState';
-import { Index, Locks, UndoBookmark, UndoLevel, UndoManager } from './UndoManagerTypes';
+import type { Index, Locks, UndoBookmark, UndoLevel, UndoManager } from './UndoManagerTypes';
 
 export const beforeChange = (editor: Editor, locks: Locks, beforeBookmark: UndoBookmark): void => {
   if (isUnlocked(locks)) {
@@ -20,7 +22,7 @@ export const addUndoLevel = (
   locks: Locks,
   beforeBookmark: UndoBookmark,
   level?: Partial<UndoLevel>,
-  event?: Event
+  event?: EditorEvent<unknown>
 ): UndoLevel | null => {
   const currentLevel = Levels.createFromEditor(editor);
 

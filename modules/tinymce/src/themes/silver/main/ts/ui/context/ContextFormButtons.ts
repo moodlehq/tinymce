@@ -1,15 +1,16 @@
 import {
-  AlloyComponent, AlloyEvents,
-  Disabling, Memento, MementoRecord,
-  SimpleOrSketchSpec
+  type AlloyComponent, AlloyEvents,
+  Disabling, Memento, type MementoRecord,
+  type SimpleOrSketchSpec
 } from '@ephox/alloy';
 import { StructureSchema } from '@ephox/boulder';
-import { InlineContent, Toolbar } from '@ephox/bridge';
-import { Arr, Fun, Optional } from '@ephox/katamari';
+import { type InlineContent, Toolbar } from '@ephox/bridge';
+import { Arr, Fun, Optional, type Singleton } from '@ephox/katamari';
 
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
-import { internalToolbarButtonExecute, InternalToolbarButtonExecuteEvent } from '../toolbar/button/ButtonEvents';
+import type { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import { internalToolbarButtonExecute, type InternalToolbarButtonExecuteEvent } from '../toolbar/button/ButtonEvents';
 import { renderToolbarButtonWith, renderToolbarToggleButtonWith } from '../toolbar/button/ToolbarButtons';
+
 import { getFormApi } from './ContextFormApi';
 
 interface ContextFormButtonRegistry {
@@ -17,14 +18,14 @@ interface ContextFormButtonRegistry {
   readonly findPrimary: (compInSystem: AlloyComponent) => Optional<AlloyComponent>;
 }
 
-const runOnExecute = <T, U>(memInput: MementoRecord, original: { onAction: (formApi: InlineContent.ContextFormInstanceApi<U>, buttonApi: T) => void }) =>
+const runOnExecute = <T, U>(memInput: MementoRecord, original: { onAction: (formApi: InlineContent.ContextFormInstanceApi<U>, buttonApi: T) => void }, valueState: Singleton.Value<U>) =>
   AlloyEvents.run<InternalToolbarButtonExecuteEvent<T>>(internalToolbarButtonExecute, (comp, se) => {
     const input = memInput.get(comp);
-    const formApi = getFormApi<U>(input, comp.element);
+    const formApi = getFormApi<U>(input, valueState, comp.element);
     original.onAction(formApi, se.event.buttonApi);
   });
 
-const renderContextButton = <T>(memInput: MementoRecord, button: InlineContent.ContextFormButton<T>, providers: UiFactoryBackstageProviders) => {
+const renderContextButton = <T>(memInput: MementoRecord, button: InlineContent.ContextFormButton<T>, providers: UiFactoryBackstageProviders, valueState: Singleton.Value<T>) => {
   const { primary, ...rest } = button.original;
   const bridged = StructureSchema.getOrDie(
     Toolbar.createToolbarButton({
@@ -35,11 +36,11 @@ const renderContextButton = <T>(memInput: MementoRecord, button: InlineContent.C
   );
 
   return renderToolbarButtonWith(bridged, providers, [
-    runOnExecute<Toolbar.ToolbarButtonInstanceApi, T>(memInput, button)
+    runOnExecute<Toolbar.ToolbarButtonInstanceApi, T>(memInput, button, valueState)
   ]);
 };
 
-const renderContextToggleButton = <T>(memInput: MementoRecord, button: InlineContent.ContextFormToggleButton<T>, providers: UiFactoryBackstageProviders) => {
+const renderContextToggleButton = <T>(memInput: MementoRecord, button: InlineContent.ContextFormToggleButton<T>, providers: UiFactoryBackstageProviders, valueState: Singleton.Value<T>) => {
   const { primary, ...rest } = button.original;
   const bridged = StructureSchema.getOrDie(
     Toolbar.createToggleButton({
@@ -50,25 +51,25 @@ const renderContextToggleButton = <T>(memInput: MementoRecord, button: InlineCon
   );
 
   return renderToolbarToggleButtonWith(bridged, providers, [
-    runOnExecute<InlineContent.ContextFormToggleButtonInstanceApi, T>(memInput, button)
+    runOnExecute<InlineContent.ContextFormToggleButtonInstanceApi, T>(memInput, button, valueState)
   ]);
 };
 
 const isToggleButton = <T>(button: InlineContent.ContextFormCommand<T>): button is InlineContent.ContextFormToggleButton<T> =>
   button.type === 'contextformtogglebutton';
 
-const generateOne = <T>(memInput: MementoRecord, button: InlineContent.ContextFormCommand<T>, providersBackstage: UiFactoryBackstageProviders) => {
+const generateOne = <T>(memInput: MementoRecord, button: InlineContent.ContextFormCommand<T>, providersBackstage: UiFactoryBackstageProviders, valueState: Singleton.Value<T>) => {
   if (isToggleButton(button)) {
-    return renderContextToggleButton(memInput, button, providersBackstage);
+    return renderContextToggleButton(memInput, button, providersBackstage, valueState);
   } else {
-    return renderContextButton(memInput, button, providersBackstage);
+    return renderContextButton(memInput, button, providersBackstage, valueState);
   }
 };
 
-const generate = <T>(memInput: MementoRecord, buttons: InlineContent.ContextFormCommand<T>[], providersBackstage: UiFactoryBackstageProviders): ContextFormButtonRegistry => {
+const generate = <T>(memInput: MementoRecord, buttons: InlineContent.ContextFormCommand<T>[], providersBackstage: UiFactoryBackstageProviders, valueState: Singleton.Value<T>): ContextFormButtonRegistry => {
 
   const mementos = Arr.map(buttons, (button) => Memento.record(
-    generateOne(memInput, button, providersBackstage)
+    generateOne(memInput, button, providersBackstage, valueState)
   ));
 
   const asSpecs = () => Arr.map(mementos, (mem) => mem.asSpec());

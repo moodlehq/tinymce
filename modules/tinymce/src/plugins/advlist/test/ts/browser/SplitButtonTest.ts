@@ -3,25 +3,28 @@ import { describe, it } from '@ephox/bedrock-client';
 import { SelectorFind, SugarBody, SugarDocument } from '@ephox/sugar';
 import { TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import AdvListPlugin from 'tinymce/plugins/advlist/Plugin';
 import ListsPlugin from 'tinymce/plugins/lists/Plugin';
 
 describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
   const hook = TinyHooks.bddSetupLight<Editor>({
     plugins: 'advlist lists',
-    advlist_bullet_styles: 'default,lower-alpha,lower-greek,lower-roman,upper-alpha,upper-roman',
-    advlist_number_styles: 'default,circle,square',
+    advlist_bullet_styles: 'default,circle,disc,square',
+    advlist_number_styles: 'default,lower-alpha,lower-greek,lower-roman,upper-alpha,upper-roman',
     toolbar: 'numlist bullist',
     base_url: '/project/tinymce/js/tinymce'
   }, [ AdvListPlugin, ListsPlugin ]);
 
   const pClickOnSplitBtnFor = async (editor: Editor, label: string) => {
-    TinyUiActions.clickOnToolbar(editor, '[aria-label="' + label + '"] > .tox-tbtn + .tox-split-button__chevron');
+    const selector = label === 'Numbered list' ?
+      'button[data-mce-name="numlist-chevron"][aria-label^="Numbered list"]' :
+      'button[data-mce-name="bullist-chevron"][aria-label^="Bullet list"]';
+    TinyUiActions.clickOnToolbar(editor, selector);
     await TinyUiActions.pWaitForUi(editor, '.tox-menu.tox-selected-menu');
   };
 
-  const assertNumListStructure = () => {
+  const assertBullListStructure = () => {
     Assertions.assertStructure('A basic alert dialog should have these components',
       ApproxStructure.build((s, str, arr) => s.element('div', {
         classes: [ arr.has('tox-tiered-menu') ],
@@ -76,6 +79,21 @@ describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
                     ],
                     attrs: {
                       'role': str.is('menuitemradio'),
+                      'aria-label': str.is('Disc')
+                    },
+                    children: [
+                      s.element('div', {
+                        classes: [ arr.has('tox-collection__item-icon') ]
+                      })
+                    ]
+                  }),
+                  s.element('div', {
+                    classes: [
+                      arr.has('tox-menu-nav__js'),
+                      arr.has('tox-collection__item')
+                    ],
+                    attrs: {
+                      'role': str.is('menuitemradio'),
                       'aria-label': str.is('Square')
                     },
                     children: [
@@ -94,7 +112,7 @@ describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
     );
   };
 
-  const assertBullListStructure = () => {
+  const assertNumListStructure = () => {
     Assertions.assertStructure('A basic alert dialog should have these components',
       ApproxStructure.build((s, str, arr) => s.element('div', {
         classes: [ arr.has('tox-tiered-menu') ],
@@ -232,11 +250,13 @@ describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
     TinyUiActions.keyup(editor, Keys.escape());
   });
 
-  const assertButtonEnabled = (selector: string) => UiFinder.exists(SugarBody.body(), `[data-mce-name="${selector}"][aria-disabled="false"]`);
+  const assertButtonEnabled = (selector: string) => UiFinder.exists(SugarBody.body(), `button[data-mce-name="${selector}"]:not([aria-disabled="true"])`);
 
-  const assertButtonDisabled = (selector: string) => UiFinder.exists(SugarBody.body(), `[data-mce-name="${selector}"][aria-disabled="true"]`);
+  const assertButtonDisabled = (selector: string) => UiFinder.exists(SugarBody.body(), `button[data-mce-name="${selector}"][aria-disabled="true"]`);
 
-  const assertMenuPartEnabled = (selector: string) => UiFinder.notExists(SugarBody.body(), `[data-mce-name="${selector}"] > span.tox-tbtn.tox-tbtn--select[aria-disabled="false"]`);
+  const assertMenuPartEnabled = (selector: string) => UiFinder.exists(SugarBody.body(), `button[data-mce-name="${selector}-chevron"]:not([aria-disabled="true"])`);
+
+  const assertMenuPartDisabled = (selector: string) => UiFinder.exists(SugarBody.body(), `button[data-mce-name="${selector}-chevron"][aria-disabled="true"]`);
 
   it('TINY-112674: Advlist split buttons should be disabled in readonly mode', async () => {
     const editor = hook.editor();
@@ -248,11 +268,15 @@ describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
     editor.mode.set('readonly');
     assertButtonDisabled('numlist');
     assertButtonDisabled('bullist');
+    assertMenuPartDisabled('numlist');
+    assertMenuPartDisabled('bullist');
 
     editor.mode.set('design');
     editor.setEditableRoot(false);
     assertButtonDisabled('numlist');
     assertButtonDisabled('bullist');
+    assertMenuPartDisabled('numlist');
+    assertMenuPartDisabled('bullist');
 
     editor.setEditableRoot(true);
     assertButtonEnabled('numlist');
@@ -267,6 +291,8 @@ describe('browser.tinymce.plugins.advlist.SplitButtonTest', () => {
     TinySelections.setCursor(editor, [ 1, 0, 0 ], 1);
     assertButtonDisabled('numlist');
     assertButtonDisabled('bullist');
+    assertMenuPartDisabled('numlist');
+    assertMenuPartDisabled('bullist');
 
     TinySelections.setCursor(editor, [ 2, 0, 0 ], 1);
     assertButtonEnabled('numlist');

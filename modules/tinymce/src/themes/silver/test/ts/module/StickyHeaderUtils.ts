@@ -1,6 +1,6 @@
-import { ApproxStructure, Assertions, Keyboard, Keys, StructAssert, UiFinder, Waiter } from '@ephox/agar';
+import { ApproxStructure, Assertions, Keyboard, Keys, type StructAssert, UiFinder, Waiter } from '@ephox/agar';
 import { Arr, Fun } from '@ephox/katamari';
-import { Css, Focus, Scroll, SugarBody, SugarDocument, SugarElement } from '@ephox/sugar';
+import { Css, Focus, Scroll, SugarBody, SugarDocument, type SugarElement } from '@ephox/sugar';
 import { assert } from 'chai';
 
 import { ToolbarLocation } from 'tinymce/themes/silver/api/Options';
@@ -24,6 +24,9 @@ const bottomAnchorbar = (s: ApproxStructure.StructApi, arr: ApproxStructure.Arra
 const staticPartsInner = (s: ApproxStructure.StructApi, arr: ApproxStructure.ArrayApi): StructAssert[] =>
   // should not change
   [
+    s.element('div', {
+      classes: [ arr.has('tox-promotion') ]
+    }),
     s.element('div', {
       classes: [ arr.has('tox-menubar') ]
     }),

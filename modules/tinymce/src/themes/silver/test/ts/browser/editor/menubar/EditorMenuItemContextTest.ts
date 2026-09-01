@@ -5,7 +5,7 @@ import { Attribute, SugarBody } from '@ephox/sugar';
 import { TinyHooks, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 
 describe('browser.tinymce.themes.silver.editor.toolbar.EditorMenuItemContextTest', () => {
   const assertMenuEnabled = (menu: string) => {
@@ -622,7 +622,7 @@ describe('browser.tinymce.themes.silver.editor.toolbar.EditorMenuItemContextTest
           const image = editor.dom.select('img')[0];
           let imageLoaded = false;
           image.onload = () => imageLoaded = true;
-          await Waiter.pTryUntilPredicate('Wait for iframe to finish loading', () => imageLoaded);
+          await Waiter.pTryUntilPredicate('Wait for image to finish loading', () => imageLoaded);
           editor.selection.select(image);
           TinyUiActions.clickOnMenu(editor, '.tox-mbtn:contains("test")');
           await scenario.pAssertMenuItemDisabled(editor, 't11');

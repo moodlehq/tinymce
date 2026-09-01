@@ -1,20 +1,22 @@
-import { AlloyComponent, AlloySpec, AlloyTriggers, Memento, SketchSpec } from '@ephox/alloy';
-import { InlineContent } from '@ephox/bridge';
-import { Arr, Fun, Id, Optional } from '@ephox/katamari';
+import { type AlloyComponent, type AlloySpec, AlloyTriggers, Memento, type SketchSpec } from '@ephox/alloy';
+import type { InlineContent } from '@ephox/bridge';
+import { Arr, Fun, Id, Optional, Singleton } from '@ephox/katamari';
 
-import { ToolbarMode } from '../../api/Options';
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
-import { renderToolbar, ToolbarGroup } from '../toolbar/CommonToolbar';
+import type { ToolbarMode } from '../../api/Options';
+import type { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import { renderToolbar, type ToolbarGroup } from '../toolbar/CommonToolbar';
+
 import { generate } from './ContextFormButtons';
 import * as ContextFormSizeInput from './ContextFormSizeInput';
 import * as ContextFormSlider from './ContextFormSlider';
 import * as ContextFormTextInput from './ContextFormTextInput';
 
 const buildInitGroup = <T>(
-  f: (providers: UiFactoryBackstageProviders, onEnter: (input: AlloyComponent) => Optional<boolean>) => SketchSpec,
+  f: (providers: UiFactoryBackstageProviders, onEnter: (input: AlloyComponent) => Optional<boolean>, valueState: Singleton.Value<T>) => SketchSpec,
   ctx: InlineContent.BaseContextForm<T>,
   providers: UiFactoryBackstageProviders
 ): ToolbarGroup[] => {
+  const valueState = Singleton.value<T>();
   const onEnter = (input: AlloyComponent) => {
     return startCommands.findPrimary(input).orThunk(() => endCommands.findPrimary(input)).map((primary) => {
       AlloyTriggers.emitExecute(primary);
@@ -22,10 +24,10 @@ const buildInitGroup = <T>(
     });
   };
 
-  const memInput = Memento.record(f(providers, onEnter));
+  const memInput = Memento.record(f(providers, onEnter, valueState));
   const commandParts = Arr.partition(ctx.commands, (command) => command.align === 'start');
-  const startCommands = generate(memInput, commandParts.pass, providers);
-  const endCommands = generate(memInput, commandParts.fail, providers);
+  const startCommands = generate(memInput, commandParts.pass, providers, valueState);
+  const endCommands = generate(memInput, commandParts.fail, providers, valueState);
 
   return Arr.filter([
     {

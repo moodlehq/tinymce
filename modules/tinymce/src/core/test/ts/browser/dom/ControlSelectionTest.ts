@@ -1,11 +1,11 @@
 import { Assertions, FocusTools, Mouse, UiFinder, Waiter } from '@ephox/agar';
 import { beforeEach, describe, it } from '@ephox/bedrock-client';
 import { Arr, Cell, Obj, Strings } from '@ephox/katamari';
-import { Attribute, Css, Hierarchy, SugarDocument, SugarElement } from '@ephox/sugar';
+import { Attribute, Css, Hierarchy, SugarDocument, type SugarElement } from '@ephox/sugar';
 import { TinyAssertions, TinyContentActions, TinyDom, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import Env from 'tinymce/core/api/Env';
 
 describe('browser.tinymce.core.dom.ControlSelectionTest', () => {
@@ -172,7 +172,7 @@ describe('browser.tinymce.core.dom.ControlSelectionTest', () => {
     TinySelections.select(editor, 'span.mce-object-video', []);
     await pWaitForDragHandles(editorBody, '#mceResizeHandlenw');
     TinyAssertions.assertContentPresence(editor, {
-      'span[data-mce-selected=1] video': 1,
+      'span[data-mce-selected="1"] video': 1,
       'span[data-mce-selected] audio': 0
     });
 
@@ -182,7 +182,7 @@ describe('browser.tinymce.core.dom.ControlSelectionTest', () => {
     await Waiter.pTryUntil('Wait for resize handles to disappear', () => UiFinder.notExists(editorBody, '#mceResizeHandlenw'));
     TinyAssertions.assertContentPresence(editor, {
       'span[data-mce-selected] video': 0,
-      'span[data-mce-selected=3] audio': 1
+      'span[data-mce-selected="3"] audio': 1
     });
 
     const videoPreviewSpan = editor.dom.select('span')[0];
@@ -190,7 +190,7 @@ describe('browser.tinymce.core.dom.ControlSelectionTest', () => {
     TinySelections.select(editor, 'span.mce-object-video', []);
     await pWaitForDragHandles(editorBody, '#mceResizeHandlenw');
     TinyAssertions.assertContentPresence(editor, {
-      'span[data-mce-selected=2] video': 1,
+      'span[data-mce-selected="2"] video': 1,
       'span[data-mce-selected] audio': 0
     });
   });

@@ -5,7 +5,7 @@ import { Insert, Remove, SugarBody, SugarElement } from '@ephox/sugar';
 import { TinyHooks } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import FullscreenPlugin from 'tinymce/plugins/fullscreen/Plugin';
 import { ToolbarLocation, ToolbarMode } from 'tinymce/themes/silver/api/Options';
 
@@ -85,8 +85,20 @@ const testStickyHeader = (toolbarMode: ToolbarMode, toolbarLocation: ToolbarLoca
         }
       });
 
+      beforeEach(async () => {
+        const editor = hook.editor();
+
+        // Open the more drawer if it was closed during the previous test
+        if (toolbarMode !== ToolbarMode.default && !editor.queryCommandState('ToggleToolbarDrawer')) {
+          await MenuUtils.pOpenMore(toolbarMode);
+          MenuUtils.assertMoreDrawerInViewport(toolbarMode);
+        }
+      });
+
       after(async () => {
-        if (toolbarMode !== ToolbarMode.default) {
+        const editor = hook.editor();
+
+        if (toolbarMode !== ToolbarMode.default && editor.queryCommandState('ToggleToolbarDrawer')) {
           await MenuUtils.pCloseMore(toolbarMode);
         }
       });
@@ -114,7 +126,7 @@ const testStickyHeader = (toolbarMode: ToolbarMode, toolbarLocation: ToolbarLoca
         await StickyUtils.pOpenMenuAndTestScrolling(() => MenuUtils.pOpenNestedMenus([
           {
             label: 'Open menu bar Format menu',
-            selector: 'button:contains(Format)[role=menuitem]'
+            selector: 'button[role=menuitem]:contains(Format)'
           },
           {
             label: 'then Formats submenu',
@@ -131,7 +143,7 @@ const testStickyHeader = (toolbarMode: ToolbarMode, toolbarLocation: ToolbarLoca
         await StickyUtils.pOpenMenuAndTestScrolling(() => MenuUtils.pOpenNestedMenus([
           {
             label: 'Open splitmenu item, color palette',
-            selector: 'div[data-mce-name="forecolor"][aria-expanded=false]'
+            selector: 'button[data-mce-name="forecolor-chevron"]'
           }
         ]), 1, isToolbarTop);
       });

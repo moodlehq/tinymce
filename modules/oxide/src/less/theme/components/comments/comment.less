@@ -8,14 +8,16 @@
 @comment-background-color: @background-color;
 @comment-border-color: @comment-background-color;
 @comment-border-radius: @panel-border-radius;
-@comment-border: 1px solid @comment-border-color;
-@comment-box-shadow: 0 4px 8px 0 fade(@color-black, 10%);
+@comment-border-width: 1px;
+@comment-border: @comment-border-width solid @comment-border-color;
+@comment-box-shadow: @sidebar-header-box-shadow;
 //TODO: Same as menu. Make a common helper variable?
 @comment-font-size: @font-size-md;
 @comment-font-style: normal;
 @comment-font-weight: @font-weight-normal;
 @comment-line-height: @line-height-base;
-@comment-padding: @pad-sm @pad-sm @pad-md @pad-sm;
+@comment-padding: @pad-sm;
+@comment-padding-bottom: @pad-md;
 @comment-text-color: @text-color;
 @comment-text-transform: initial;
 @comment-text-color-muted: @text-color-muted;
@@ -24,43 +26,14 @@
 @z-index-comment-overlay-text: 10;
 @z-index-comment-busy-spinner: 20;
 
+@single-comment-margin-bottom: 12px;
 .tox {
-
-  .tox-conversations {
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    height: 100%;
-
-    /* This is to give the sidebar a consistent width. Need a solution for this */
-    min-width: 300px;
-    max-width: 300px;
-    width: 300px;
-  }
-
-  .tox-conversations__header {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    box-shadow: 0px 4px 8px 0px rgba(34, 47, 62, 0.1);
-    padding: 8px 12px;
-    background: @background-color;
-    z-index: 1;
-  }
-
-  .tox-conversations__title {
-    font-size: 20px;
-    font-weight: 400;
-    padding: 8px 0 8px 0;
-    color: @comment-text-color;
-    line-height: 28px;
-  }
-
   .tox-comment {
     background: @comment-background-color;
     border: @comment-border;
     border-radius: @comment-border-radius;
     padding: @comment-padding;
+    padding-bottom: @comment-padding-bottom;
     position: relative;
 
     &:hover {
@@ -69,8 +42,8 @@
 
     &.tox-comment--selected {
       background-color: @comment-selected-background-color;
-      border: 1px solid @comment-selected-border-color;
-      box-shadow: 0px 4px 8px 0px rgba(34, 47, 62, 0.10);
+      border: @comment-border-width solid @comment-selected-border-color;
+      box-shadow: @comment-box-shadow;
 
       &:focus {
         border: 2px solid @keyboard-focus-outline-color;
@@ -82,7 +55,7 @@
       }
 
       .tox-comment__single {
-        margin-bottom: 12px;
+        margin-bottom: @single-comment-margin-bottom;
 
         &:focus {
           position: relative;
@@ -96,8 +69,12 @@
             bottom: -9px;
             left: -9px;
             right: -9px;
-            border-radius: 6px;
+            border-radius: @comment-border-radius;
             border: 2px solid @keyboard-focus-outline-color;
+          }
+
+          &:last-of-type:has(textarea):after {
+            bottom: calc((@single-comment-margin-bottom + @comment-padding-bottom + @comment-border-width) * -1);
           }
         }
       }
@@ -220,7 +197,7 @@
   .tox-comment-thread {
     background: @comment-background-color;
     position: relative;
-    border-radius: 6px;
+    border-radius: @comment-border-radius;
     background-color: transparent;
 
     > *:not(:first-child) {
@@ -321,34 +298,6 @@
   /* A comment fades to 0 when it is being deleted, then is removed */
   .tox-comment[data-transitioning-destination="deleting"] {
     opacity: 0.0;
-  }
-
-  //should this be in comments? Or will we use this in some different places?
-  .tox-skeleton {
-    .tox-skeleton__line {
-      height: 16px;
-      width: 100%;
-      background: linear-gradient(to right, rgba(240, 240, 240, 0.5) 8%, rgba(240, 240, 240, 0.7) 18%, rgba(240, 240, 240, 0.5) 33%);
-      animation: wave 2s infinite ease-out;
-    }
-
-    .tox-skeleton__circle {
-      height: 36px;
-      width: 36px;
-      margin-right: 8px;
-      border-radius: 100%;
-      background: linear-gradient(to right, rgba(240, 240, 240, 0.5) 8%, rgba(240, 240, 240, 0.7) 18%, rgba(240, 240, 240, 0.5) 33%);
-      animation: wave 2s infinite ease-out;
-    }
-
-    @keyframes wave {
-      0% {
-        background-position: -268px 0;
-      }
-      100% {
-        background-position: 268px 0;
-      }
-    }
   }
 
   .tox-ring-loader {

@@ -4,8 +4,8 @@ import { Arr, Cell, Fun } from '@ephox/katamari';
 import { TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import { AnnotationListenerApi } from 'tinymce/core/api/Annotator';
-import Editor from 'tinymce/core/api/Editor';
+import type { AnnotationListenerApi } from 'tinymce/core/api/Annotator';
+import type Editor from 'tinymce/core/api/Editor';
 
 import { annotate, assertHtmlContent, assertMarker } from '../../module/test/AnnotationAsserts';
 
@@ -58,7 +58,6 @@ describe('browser.tinymce.core.annotate.AnnotationChangedTest', () => {
         });
 
         // NOTE: Have to use old function syntax here when accessing "arguments"
-        // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
         const listener: AnnotationListenerApi = function (state, name, obj) {
           // NOTE: These failures won't stop the tests, but they will stop it before it updates
           // the changes in changes.set

@@ -4,11 +4,11 @@ import { Cell } from '@ephox/katamari';
 import { TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 
 describe('webdriver.tinymce.core.content.PlaceholderTest', () => {
   const togglePlaceholderCount = Cell(0);
-  const placeholder = 'Type here...';
+  const placeholder = 'Type here…';
   const hook = TinyHooks.bddSetupLight<Editor>({
     base_url: '/project/tinymce/js/tinymce',
     toolbar: 'undo redo | bold',

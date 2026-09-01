@@ -1,26 +1,27 @@
 import {
-  AddEventsBehaviour, AlloyComponent, AlloyEvents,
+  AddEventsBehaviour, type AlloyComponent, AlloyEvents,
   FormCoupledInputs as AlloyFormCoupledInputs,
   FormField as AlloyFormField,
   Input as AlloyInput,
-  AlloySpec, AlloyTriggers, Behaviour, CustomEvent, Disabling,
+  type AlloySpec, AlloyTriggers, Behaviour, type CustomEvent, Disabling,
   Focusing,
   FocusInsideModes,
   GuiFactory,
   Keying,
-  NativeEvents, Representing, SketchSpec, Tabstopping, Tooltipping
+  NativeEvents, Representing, type SketchSpec, Tabstopping, Tooltipping
 } from '@ephox/alloy';
-import { InlineContent } from '@ephox/bridge';
-import { Cell, Fun, Id, Optional, Unicode } from '@ephox/katamari';
-import { Focus, SelectorFind, SugarElement } from '@ephox/sugar';
+import type { InlineContent } from '@ephox/bridge';
+import { Cell, Fun, Id, Optional, type Singleton } from '@ephox/katamari';
+import { Focus, SelectorFind, type SugarElement } from '@ephox/sugar';
 
 import { formInputEvent } from 'tinymce/themes/silver/ui/general/FormEvents';
 
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import type { UiFactoryBackstageProviders } from '../../backstage/Backstage';
 import * as UiState from '../../UiState';
-import { onControlAttached, onControlDetached } from '../controls/Controls';
+import { onContextFormControlDetached, onControlAttached } from '../controls/Controls';
 import * as Icons from '../icons/Icons';
-import { formatSize, makeRatioConverter, noSizeConversion, parseSize, SizeConversion } from '../sizeinput/SizeInputModel';
+import { formatSize, makeRatioConverter, noSizeConversion, parseSize, type SizeConversion } from '../sizeinput/SizeInputModel';
+
 import * as ContextFormApi from './ContextFormApi';
 interface RatioEvent extends CustomEvent {
   readonly isField1: boolean;
@@ -28,13 +29,14 @@ interface RatioEvent extends CustomEvent {
 export const renderContextFormSizeInput = (
   ctx: InlineContent.ContextSizeInputForm,
   providersBackstage: UiFactoryBackstageProviders,
-  onEnter: (input: AlloyComponent) => Optional<boolean>
+  onEnter: (input: AlloyComponent) => Optional<boolean>,
+  valueState: Singleton.Value<InlineContent.SizeData>
 ): SketchSpec => {
   const { width, height } = ctx.initValue();
   let converter: SizeConversion = noSizeConversion;
   const enabled = true;
   const ratioEvent = Id.generate('ratio-event');
-  const getApi = ContextFormApi.getFormApi<InlineContent.SizeData>;
+  const getApi = (comp: AlloyComponent) => ContextFormApi.getFormApi<InlineContent.SizeData>(comp, valueState);
 
   const makeIcon = (iconName: string) =>
     Icons.render(iconName, { tag: 'span', classes: [ 'tox-icon', 'tox-lock-icon__' + iconName ] }, providersBackstage.icons);
@@ -46,7 +48,7 @@ export const renderContextFormSizeInput = (
   const pLock = AlloyFormCoupledInputs.parts.lock({
     dom: {
       tag: 'button',
-      classes: [ 'tox-lock', 'tox-button', 'tox-button--naked', 'tox-button--icon' ],
+      classes: [ 'tox-lock', 'tox-lock-context-form-size-input', 'tox-button', 'tox-button--naked', 'tox-button--icon' ],
       attributes: {
         'aria-label': translatedLabel,
         'data-mce-name': label
@@ -143,8 +145,12 @@ export const renderContextFormSizeInput = (
   const editorOffCell = Cell(Fun.noop);
 
   const controlLifecycleHandlers = [
-    onControlAttached( { onSetup: ctx.onSetup, getApi }, editorOffCell),
-    onControlDetached( { getApi }, editorOffCell)
+    onControlAttached({
+      onBeforeSetup: (comp) => SelectorFind.descendant<HTMLElement>(comp.element, 'input').each(Focus.focus),
+      onSetup: ctx.onSetup,
+      getApi
+    }, editorOffCell),
+    onContextFormControlDetached({ getApi }, editorOffCell, valueState),
   ];
 
   return AlloyFormCoupledInputs.sketch({
@@ -155,11 +161,10 @@ export const renderContextFormSizeInput = (
     components: [
       // NOTE: Form coupled inputs to the FormField.sketch themselves.
       widthField,
-      heightField,
       formGroup([
-        getLabel(Unicode.nbsp),
         pLock
-      ])
+      ]),
+      heightField
     ],
     field1Name: 'width',
     field2Name: 'height',
@@ -207,7 +212,7 @@ export const renderContextFormSizeInput = (
           const value2 = optOther.map<string>(Representing.getValue).getOr('');
           converter = makeRatioConverter(value1, value2);
         }),
-        AlloyEvents.run(formInputEvent, (input) => ctx.onInput(ContextFormApi.getFormApi(input))),
+        AlloyEvents.run(formInputEvent, (input) => ctx.onInput(getApi(input))),
         ...controlLifecycleHandlers,
       ])
     ])

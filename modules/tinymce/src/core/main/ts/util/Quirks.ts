@@ -1,10 +1,11 @@
-import { Fun } from '@ephox/katamari';
+import { Fun, Optional, Optionals, Type } from '@ephox/katamari';
+import { SugarElement, SugarNode, Traverse } from '@ephox/sugar';
 
-import Editor from '../api/Editor';
+import type Editor from '../api/Editor';
 import Env from '../api/Env';
 import * as Options from '../api/Options';
 import Delay from '../api/util/Delay';
-import { EditorEvent } from '../api/util/EventDispatcher';
+import type { EditorEvent } from '../api/util/EventDispatcher';
 import Tools from '../api/util/Tools';
 import VK from '../api/util/VK';
 import * as CaretContainer from '../caret/CaretContainer';
@@ -147,7 +148,11 @@ const Quirks = (editor: Editor): Quirks => {
 
         if (e.target === editor.getDoc().documentElement) {
           rng = selection.getRng();
-          editor.getBody().focus();
+          // TINY-12245: this is needed to avoid the scroll back to the top when the content is scrolled, there is no selection and the user is clicking on a non selectable editor element
+          // example content scrolled by browser search and user click on the horizontal scroll bar
+          if (editor.getDoc().getSelection()?.anchorNode !== null) {
+            editor.getBody().focus();
+          }
 
           if (e.type === 'mousedown') {
             if (CaretContainer.isCaretContainer(rng.startContainer)) {
@@ -246,6 +251,37 @@ const Quirks = (editor: Editor): Quirks => {
         e.preventDefault();
         selection.select(target);
       }
+    });
+  };
+
+  /**
+   * Fixes a Gecko a selection bug where if there is a floating image
+   * more details here: https://bugzilla.mozilla.org/show_bug.cgi?id=1959606
+   */
+  const fixFirefoxImageSelection = () => {
+    const isEditableImage = (node: Node): node is HTMLImageElement => node.nodeName === 'IMG' && editor.dom.isEditable(node);
+
+    editor.on('mousedown', (e) => {
+      Optionals.lift2(Optional.from(e.clientX), Optional.from(e.clientY), (clientX, clientY) => {
+        const caretPos = editor.getDoc().caretPositionFromPoint(clientX, clientY);
+        const img = caretPos?.offsetNode?.childNodes[caretPos.offset - (caretPos.offset > 0 ? 1 : 0)] || caretPos?.offsetNode;
+
+        if (Type.isNonNullable(img) && isEditableImage(img)) {
+          const rect = img.getBoundingClientRect();
+          e.preventDefault();
+
+          if (!editor.hasFocus()) {
+            editor.focus();
+          }
+
+          editor.selection.select(img);
+          if (e.clientX < rect.left || e.clientY < rect.top) {
+            editor.selection.collapse(true);
+          } else if (e.clientX > rect.right || e.clientY > rect.bottom) {
+            editor.selection.collapse(false);
+          }
+        }
+      });
     });
   };
 
@@ -367,6 +403,34 @@ const Quirks = (editor: Editor): Quirks => {
         rng.setStart(container, 0);
         rng.setEnd(container, 0);
         selection.setRng(rng);
+      }
+    });
+  };
+
+  /*
+   * Firefox-specific fix for arrow key navigation. In Firefox, users can't move the caret out of a
+   * `<figcaption>` element using the left and right arrow keys. This function handles those keystrokes
+   * to allow navigation to the previous/next sibling of the figure element.
+  */
+  const arrowInFigcaption = () => {
+    const isFigcaption = SugarNode.isTag('figcaption');
+    editor.on('keydown', (e) => {
+      if (e.keyCode === VK.LEFT || e.keyCode === VK.RIGHT) {
+        const currentNode = SugarElement.fromDom(editor.selection.getNode());
+        if (isFigcaption(currentNode) && editor.selection.isCollapsed()) {
+          Traverse.parent(currentNode).bind((parent) => {
+            if (editor.selection.getRng().startOffset === 0 && e.keyCode === VK.LEFT) {
+              return Traverse.prevSibling(parent);
+            } else if (editor.selection.getRng().endOffset === currentNode.dom.textContent?.length && e.keyCode === VK.RIGHT) {
+              return Traverse.nextSibling(parent);
+            } else {
+              return Optional.none();
+            }
+          }).each((targetSibling) => {
+            editor.selection.setCursorLocation(targetSibling.dom, 0);
+          });
+        }
+
       }
     });
   };
@@ -713,6 +777,8 @@ const Quirks = (editor: Editor): Quirks => {
 
     // Gecko
     if (isGecko) {
+      arrowInFigcaption();
+      fixFirefoxImageSelection();
       removeHrOnBackspace();
       focusBody();
       removeStylesWhenDeletingAcrossBlockElements();

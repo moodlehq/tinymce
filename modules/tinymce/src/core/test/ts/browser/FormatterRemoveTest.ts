@@ -3,7 +3,7 @@ import { PlatformDetection } from '@ephox/sand';
 import { LegacyUnit, TinyApis, TinyAssertions, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import { ZWSP } from 'tinymce/core/text/Zwsp';
 
 import * as KeyUtils from '../module/test/KeyUtils';
@@ -376,6 +376,7 @@ describe('browser.tinymce.core.FormatterRemoveTest', () => {
     editor.setContent(initialContent);
     LegacyUnit.setSelection(editor, 'p:nth-child(2) b', 0, 'p:last-of-type b', 3);
     editor.formatter.remove('format');
+
     if (isOldSafari) {
       // Safari 17 will not select the non-editable content
       // Selection only covers editable "def" and removes format correctly

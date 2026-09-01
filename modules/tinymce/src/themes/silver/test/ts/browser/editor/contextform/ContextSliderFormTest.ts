@@ -1,11 +1,11 @@
-import { ApproxStructure, Assertions, FocusTools, Keys, StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
+import { ApproxStructure, Assertions, FocusTools, Keys, type StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
 import { afterEach, describe, it } from '@ephox/bedrock-client';
 import { Fun } from '@ephox/katamari';
 import { Attribute, SugarBody, SugarDocument, Value } from '@ephox/sugar';
 import { TinyHooks, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 
 describe('browser.tinymce.themes.silver.editor.ContextSliderFormTest', () => {
   const store = TestStore();
@@ -48,6 +48,37 @@ describe('browser.tinymce.themes.silver.editor.ContextSliderFormTest', () => {
           }
         ]
       });
+
+      ed.ui.registry.addContextForm('test-form-disabled', {
+        type: 'contextsliderform',
+        launch: {
+          type: 'contextformtogglebutton',
+          icon: 'fake-icon-name',
+          tooltip: 'ABC'
+        },
+        predicate: (node) => node.nodeName.toLowerCase() === 'a',
+        min: Fun.constant(-100),
+        max: Fun.constant(100),
+        initValue: Fun.constant(37),
+        onSetup: (api) => {
+          api.setInputEnabled(false);
+          store.add('setup');
+          return Fun.noop;
+        },
+        commands: [
+          {
+            type: 'contextformbutton',
+            icon: 'fake-icon-name',
+            tooltip: 'A',
+            align: 'start',
+            onAction: (formApi) => {
+              store.add(`${formApi.isInputEnabled()}`);
+              formApi.setInputEnabled(true);
+              store.add(`${formApi.isInputEnabled()}`);
+            }
+          }
+        ]
+      });
     }
   }, [], true);
 
@@ -69,7 +100,11 @@ describe('browser.tinymce.themes.silver.editor.ContextSliderFormTest', () => {
   };
 
   const checkFirstButtonGroup = (label: string, children: ApproxStructure.Builder<StructAssert[]>) => {
-    const group = UiFinder.findIn(SugarBody.body(), '.tox-pop .tox-toolbar__group:first').getOrDie();
+    const groups = UiFinder.findAllIn(SugarBody.body(), '.tox-pop .tox-toolbar__group');
+    if (groups.length === 0) {
+      throw new Error('Cannot find any toolbar group');
+    }
+    const group = groups[0];
     Assertions.assertStructure(
       label,
       ApproxStructure.build((s, str, arr) => s.element('div', {
@@ -80,7 +115,11 @@ describe('browser.tinymce.themes.silver.editor.ContextSliderFormTest', () => {
   };
 
   const checkLastButtonGroup = (label: string, children: ApproxStructure.Builder<StructAssert[]>) => {
-    const group = UiFinder.findIn(SugarBody.body(), '.tox-pop .tox-toolbar__group:last').getOrDie();
+    const groups = UiFinder.findAllIn(SugarBody.body(), '.tox-pop .tox-toolbar__group');
+    if (groups.length === 0) {
+      throw new Error('Cannot find any toolbar group');
+    }
+    const group = groups[groups.length - 1];
     Assertions.assertStructure(
       label,
       ApproxStructure.build((s, str, arr) => s.element('div', {
@@ -179,6 +218,13 @@ describe('browser.tinymce.themes.silver.editor.ContextSliderFormTest', () => {
     TinyUiActions.keystroke(editor, Keys.tab(), { shiftKey: true });
 
     await FocusTools.pTryOnSelector('Focus should be back on A button', SugarDocument.getDocument(), buttonASelector);
+  });
+
+  it('TINY-11912: disabling the input `onSetup` should results in a disabled input also in the commands', async () => {
+    const editor = hook.editor();
+    openToolbar(editor, 'test-form-disabled');
+    TinyUiActions.clickOnUi(editor, '.tox-pop button[aria-label="A"]');
+    store.assertEq('Input should trigger onInput with the right value and type', [ 'setup', 'false', 'true' ]);
   });
 });
 

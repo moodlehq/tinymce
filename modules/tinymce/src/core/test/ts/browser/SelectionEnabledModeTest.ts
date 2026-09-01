@@ -1,12 +1,12 @@
 import { ApproxStructure, Mouse, UiFinder, Clipboard, Waiter, Keys } from '@ephox/agar';
 import { afterEach, context, describe, it } from '@ephox/bedrock-client';
 import { Singleton } from '@ephox/katamari';
-import { Attribute, Css, SelectorExists, SelectorFind, SugarElement, Traverse } from '@ephox/sugar';
+import { Attribute, Css, SelectorExists, SelectorFind, type SugarElement, Traverse } from '@ephox/sugar';
 import { TinyAssertions, TinyContentActions, TinyDom, TinyHooks, TinySelections } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
-import { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
+import type Editor from 'tinymce/core/api/Editor';
+import type { EditorEvent } from 'tinymce/core/api/util/EventDispatcher';
 import * as CaretContainer from 'tinymce/core/caret/CaretContainer';
 import AccordionPlugin from 'tinymce/plugins/accordion/Plugin';
 import AdvancedListPlugin from 'tinymce/plugins/advlist/Plugin';
@@ -16,6 +16,8 @@ import ImagePlugin from 'tinymce/plugins/image/Plugin';
 import ListPlugin from 'tinymce/plugins/lists/Plugin';
 import MediaPlugin from 'tinymce/plugins/media/Plugin';
 import TablePlugin from 'tinymce/plugins/table/Plugin';
+
+import * as Assets from '../module/Assets';
 
 describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
   const hook = TinyHooks.bddSetup<Editor>({
@@ -112,10 +114,10 @@ describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
       </ul>
       </div>`;
   const mediaElementHtml = `<span class="mce-preview-object mce-object-iframe" contenteditable="false" data-mce-object="iframe" data-mce-p-allowfullscreen="allowfullscreen" data-mce-p-src="https://www.youtube.com/embed/8aGhZQkoFbQ">`
-      + `<iframe src="https://www.youtube.com/embed/8aGhZQkoFbQ" width="560" height="314" frameborder="0" allowfullscreen="allowfullscreen" data-mce-src="https://www.youtube.com/embed/8aGhZQkoFbQ"></iframe><span class="mce-shim"></span></span>`;
+    + `<iframe src="https://www.youtube.com/embed/8aGhZQkoFbQ" width="560" height="314" frameborder="0" allowfullscreen="allowfullscreen" data-mce-src="https://www.youtube.com/embed/8aGhZQkoFbQ"></iframe><span class="mce-shim"></span></span>`;
   const iframeMediaEmbedHtml = `<div style="left: 0px; width: 100%; height: 0px; position: relative; padding-bottom: 56.25%; max-width: 650px;" contenteditable="false" data-ephox-embed-iri="https://www.youtube.com/watch?v=8aGhZQkoFbQ">` +
-  `<iframe style="top: 0; left: 0; width: 100%; height: 100%; position: absolute; border: 0;" src="https://www.youtube.com/embed/8aGhZQkoFbQ?rel=0" scrolling="no" allowfullscreen="allowfullscreen"></iframe>` +
-  `</div>`;
+    `<iframe style="top: 0; left: 0; width: 100%; height: 100%; position: absolute; border: 0;" src="https://www.youtube.com/embed/8aGhZQkoFbQ?rel=0" scrolling="no" allowfullscreen="allowfullscreen"></iframe>` +
+    `</div>`;
 
   const copy = (editor: Editor, spath: number[], soffset: number, fpath: number[], foffset: number) => {
     TinySelections.setSelection(editor, spath, soffset, fpath, foffset);
@@ -202,7 +204,7 @@ describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
       const editor = hook.editor();
 
       setMode(editor, 'design');
-      editor.setContent('<figure class="image"><img src="https://www.google.com/logos/google.jpg"><figcaption>Image caption</figcaption></figure>');
+      editor.setContent(`<figure class="image"><img src="${Assets.getGreenImageDataUrl()}"><figcaption>Image caption</figcaption></figure>`);
       await Waiter.pTryUntil('Waited for image to load', () => assert.isTrue(UiFinder.findIn<HTMLImageElement>(TinyDom.body(editor), 'img').getOrDie().dom.complete));
       TinySelections.select(editor, 'figure', []);
       await pAssertOutlineStyle(UiFinder.findIn(TinyDom.body(editor), 'figure').getOrDie(), imageSelectedOutline);
@@ -366,7 +368,7 @@ describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
 
     it('TINY-10981: Toggling accordion should be permitted', () => {
       const editor = hook.editor();
-      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details>`);
+      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary…</summary><p>Accordion Body</p></details>`);
       TinySelections.setCursor(editor, [ 0, 0, 0 ], 4);
       TinyContentActions.keystroke(editor, Keys.enter());
       TinyAssertions.assertContentPresence(editor, { 'details[open="open"]': 1 });
@@ -383,7 +385,7 @@ describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
 
     it('TINY-10981: Toggling accordion should be permitted with execCommand', () => {
       const editor = hook.editor();
-      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details>`);
+      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary…</summary><p>Accordion Body</p></details>`);
       TinySelections.setCursor(editor, [ 0, 0, 0 ], 4);
       editor.execCommand('ToggleAccordion', false, true);
       TinyAssertions.assertContentPresence(editor, { 'details[open="open"]': 1 });
@@ -400,15 +402,15 @@ describe('browser.tinymce.core.SelectionEnabledModeTest', () => {
 
     it('TINY-10981: Executing RemoveAccordion should not permitted when in selectionEnabled mode', () => {
       const editor = hook.editor();
-      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details><details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details>`);
+      editor.setContent(`<details class="mce-accordion"><summary>Accordion summary</summary><p>Accordion Body</p></details><details class="mce-accordion"><summary>Accordion summary</summary><p>Accordion Body</p></details>`);
       TinySelections.setCursor(editor, [ 0, 0, 0 ], 4);
       editor.execCommand('RemoveAccordion');
-      TinyAssertions.assertContent(editor, '<details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details>');
+      TinyAssertions.assertContent(editor, '<details class="mce-accordion"><summary>Accordion summary</summary><p>Accordion Body</p></details>');
 
       setMode(editor, 'readonly');
       TinySelections.setCursor(editor, [ 0, 0, 0 ], 4);
       editor.execCommand('RemoveAccordion');
-      TinyAssertions.assertContent(editor, '<details class="mce-accordion"><summary>Accordion summary...</summary><p>Accordion Body</p></details>');
+      TinyAssertions.assertContent(editor, '<details class="mce-accordion"><summary>Accordion summary</summary><p>Accordion Body</p></details>');
 
       setMode(editor, 'design');
     });

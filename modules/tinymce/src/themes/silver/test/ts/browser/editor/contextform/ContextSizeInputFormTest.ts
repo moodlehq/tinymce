@@ -1,11 +1,11 @@
-import { ApproxStructure, Assertions, FocusTools, Keys, StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
+import { ApproxStructure, Assertions, FocusTools, Keys, Mouse, type StructAssert, TestStore, UiFinder, Waiter } from '@ephox/agar';
 import { afterEach, describe, it } from '@ephox/bedrock-client';
 import { Fun } from '@ephox/katamari';
 import { SugarBody, SugarDocument, Value } from '@ephox/sugar';
-import { TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
+import { TinyDom, TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 
 describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => {
   const store = TestStore();
@@ -79,10 +79,45 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
           }
         ]
       });
+
+      ed.ui.registry.addContextToolbar('test-toolbar-disabled', {
+        items: 'test-form-disabled undo',
+        position: 'node',
+        scope: 'node',
+        predicate: (node) => node.nodeName.toLowerCase() === 'div',
+      });
+
+      ed.ui.registry.addContextForm('test-form-disabled', {
+        type: 'contextsizeinputform',
+        launch: {
+          type: 'contextformtogglebutton',
+          icon: 'fake-icon-name',
+          tooltip: 'ABC'
+        },
+        initValue: Fun.constant({ width: '100', height: '200' }),
+        onSetup: (api) => {
+          api.setInputEnabled(false);
+          store.add('setup');
+          return Fun.noop;
+        },
+        commands: [
+          {
+            type: 'contextformbutton',
+            icon: 'fake-icon-name',
+            tooltip: 'A',
+            align: 'start',
+            onAction: (formApi) => {
+              store.add(`${formApi.isInputEnabled()}`);
+              formApi.setInputEnabled(true);
+              store.add(`${formApi.isInputEnabled()}`);
+            }
+          }
+        ]
+      });
     }
   }, [], true);
   const inputWidthSelector = '.tox-pop .tox-toolbar__group:nth-of-type(2) .tox-focusable-wrapper:nth-of-type(1) input';
-  const inputHeightSelector = '.tox-pop .tox-toolbar__group:nth-of-type(2) .tox-focusable-wrapper:nth-of-type(2) input';
+  const inputHeightSelector = '.tox-pop .tox-toolbar__group:nth-of-type(2) .tox-focusable-wrapper:nth-of-type(3) input';
   const buttonASelector = '.tox-pop button[aria-label="A"]';
 
   afterEach(async () => {
@@ -103,7 +138,11 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
   };
 
   const checkFirstButtonGroup = (label: string, children: ApproxStructure.Builder<StructAssert[]>) => {
-    const group = UiFinder.findIn(SugarBody.body(), '.tox-pop .tox-toolbar__group:first').getOrDie();
+    const groups = UiFinder.findAllIn(SugarBody.body(), '.tox-pop .tox-toolbar__group');
+    if (groups.length === 0) {
+      throw new Error('Cannot find any toolbar group');
+    }
+    const group = groups[0];
     Assertions.assertStructure(
       label,
       ApproxStructure.build((s, str, arr) => s.element('div', {
@@ -114,7 +153,11 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
   };
 
   const checkLastButtonGroup = (label: string, children: ApproxStructure.Builder<StructAssert[]>) => {
-    const group = UiFinder.findIn(SugarBody.body(), '.tox-pop .tox-toolbar__group:last').getOrDie();
+    const groups = UiFinder.findAllIn(SugarBody.body(), '.tox-pop .tox-toolbar__group');
+    if (groups.length === 0) {
+      throw new Error('Cannot find any toolbar group');
+    }
+    const group = groups[groups.length - 1];
     Assertions.assertStructure(
       label,
       ApproxStructure.build((s, str, arr) => s.element('div', {
@@ -126,7 +169,8 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
 
   const clickAway = (editor: Editor) => {
     // <a> tags make the context bar appear so click away from an a tag. We have no content so it's probably fine.
-    editor.nodeChanged();
+    TinySelections.setCursor(editor, [ ], 0);
+    Mouse.trueClick(TinyDom.body(editor));
   };
 
   const pAssertNoPopDialog = () => Waiter.pTryUntil(
@@ -187,8 +231,8 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
 
   it('TINY-11342: When the context form is opened on the right side and does not fit the popup should be repositioned', async () => {
     const editor = hook.editor();
-    editor.setContent('<p style="float: right"><a href="#" style="padding-right: 100px">link</a></p>');
-    TinySelections.setCursor(editor, [ 0, 0 ], 1);
+    editor.setContent('<p style="float: right">abc<a href="#" style="padding-right: 100px">link</a></p>');
+    TinySelections.setCursor(editor, [ 0, 1 ], 1);
     await UiFinder.pWaitFor('Waiting for context toolbar to appear', SugarBody.body(), '.tox-pop[data-alloy-placement="south"]');
     TinyUiActions.clickOnUi(editor, '.tox-pop button[aria-label="ABC"]');
     await UiFinder.pWaitFor('Waiting for context toolbar to appear', SugarBody.body(), '.tox-pop[data-alloy-placement="southwest"] input');
@@ -196,8 +240,8 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
 
   it('TINY-11344: pressing `back` should show the previous toolbar', async () => {
     const editor = hook.editor();
-    editor.setContent('<div>some div</div>');
-    TinySelections.setCursor(editor, [ 0, 0 ], 1);
+    editor.setContent('<p>abc</p><div>some div</div>');
+    TinySelections.setCursor(editor, [ 1, 0 ], 1);
     await UiFinder.pWaitFor('Waiting for context toolbar to appear', SugarBody.body(), '.tox-pop[data-alloy-placement="south"]');
     TinyUiActions.clickOnUi(editor, '.tox-pop button[aria-label="ABC"]');
     TinyUiActions.clickOnUi(editor, '.tox-pop button[aria-label="Back"]');
@@ -210,35 +254,35 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
 
     const buttonBSelector = '.tox-pop button[aria-label="B"]';
     const focussableWrapperWidthSelector = '.tox-pop .tox-focusable-wrapper:nth-of-type(1)';
-    const focussableWrapperHeightSelector = '.tox-pop .tox-focusable-wrapper:nth-of-type(2)';
+    const focussableWrapperHeightSelector = '.tox-pop .tox-focusable-wrapper:nth-of-type(3)';
     const lockButtonSelector = '.tox-pop .tox-lock';
 
     FocusTools.setFocus(SugarDocument.getDocument(), buttonASelector);
     await FocusTools.pTryOnSelector('Focus should be on the A button', SugarDocument.getDocument(), buttonASelector);
     TinyUiActions.keystroke(editor, Keys.tab());
 
-    await FocusTools.pTryOnSelector('Focus should be on the first focussable wrapper', SugarDocument.getDocument(), focussableWrapperWidthSelector);
-    TinyUiActions.keystroke(editor, Keys.right());
-
-    await FocusTools.pTryOnSelector('Focus should be on the second focussable wrapper', SugarDocument.getDocument(), focussableWrapperHeightSelector);
+    await FocusTools.pTryOnSelector('Focus should be on the first focussable wrapper (width)', SugarDocument.getDocument(), focussableWrapperWidthSelector);
     TinyUiActions.keystroke(editor, Keys.right());
 
     await FocusTools.pTryOnSelector('Focus should be on the lock button wrapper', SugarDocument.getDocument(), lockButtonSelector);
     TinyUiActions.keystroke(editor, Keys.right());
 
-    await FocusTools.pTryOnSelector('Focus should stay on the lock button wrapper', SugarDocument.getDocument(), lockButtonSelector);
-    TinyUiActions.keystroke(editor, Keys.left());
+    await FocusTools.pTryOnSelector('Focus should be on the second focussable wrapper (height)', SugarDocument.getDocument(), focussableWrapperHeightSelector);
+    TinyUiActions.keystroke(editor, Keys.right());
 
-    await FocusTools.pTryOnSelector('Focus should be on the second focussable wrapper(2)', SugarDocument.getDocument(), focussableWrapperHeightSelector);
+    await FocusTools.pTryOnSelector('Focus should stay on the second focussable wrapper (height)', SugarDocument.getDocument(), focussableWrapperHeightSelector);
     TinyUiActions.keystroke(editor, Keys.enter());
 
     await FocusTools.pTryOnSelector('Focus should be on the second input', SugarDocument.getDocument(), inputHeightSelector);
     TinyUiActions.keystroke(editor, Keys.escape());
 
-    await FocusTools.pTryOnSelector('Focus should go back to the second focussable wrapper', SugarDocument.getDocument(), focussableWrapperHeightSelector);
+    await FocusTools.pTryOnSelector('Focus should go back to the second focussable wrapper (height)', SugarDocument.getDocument(), focussableWrapperHeightSelector);
     TinyUiActions.keystroke(editor, Keys.left());
 
-    await FocusTools.pTryOnSelector('Focus should be on the first focussable wrapper(2)', SugarDocument.getDocument(), focussableWrapperWidthSelector);
+    await FocusTools.pTryOnSelector('Focus should be on the lock button wrapper', SugarDocument.getDocument(), lockButtonSelector);
+    TinyUiActions.keystroke(editor, Keys.left());
+
+    await FocusTools.pTryOnSelector('Focus should be on the first focussable wrapper (width)(2)', SugarDocument.getDocument(), focussableWrapperWidthSelector);
     TinyUiActions.keystroke(editor, Keys.enter());
 
     await FocusTools.pTryOnSelector('Focus should be on the first input', SugarDocument.getDocument(), inputWidthSelector);
@@ -248,6 +292,13 @@ describe('browser.tinymce.themes.silver.editor.ContextSizeInputFormTest', () => 
     TinyUiActions.keystroke(editor, Keys.tab());
 
     await FocusTools.pTryOnSelector('Focus should be on the B button', SugarDocument.getDocument(), buttonBSelector);
+  });
+
+  it('TINY-11912: disabling the input `onSetup` should results in a disabled input also in the commands', async () => {
+    const editor = hook.editor();
+    openToolbar(editor, 'test-form-disabled');
+    TinyUiActions.clickOnUi(editor, '.tox-pop button[aria-label="A"]');
+    store.assertEq('Input should trigger onInput with the right value and type', [ 'setup', 'false', 'true' ]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, it } from '@ephox/bedrock-client';
 import { McEditor, TinyAssertions, TinyHooks } from '@ephox/wrap-mcagar';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import Plugin from 'tinymce/plugins/media/Plugin';
 
 describe('browser.tinymce.plugins.media.ContentFormatsTest', () => {
@@ -122,7 +122,6 @@ describe('browser.tinymce.plugins.media.ContentFormatsTest', () => {
       '<param name="allowfullscreen" value="true" />' +
       '<param name="allowscriptaccess" value="always" />' +
       '<param name="flashvars" value="video_src=s" />' +
-      '<!--[if IE]><param name="movie" value="../../js/tinymce/plugins/media/moxieplayer.swf" /><![endif]-->' +
       '</object>' +
       '</video>'
     );
@@ -141,9 +140,6 @@ describe('browser.tinymce.plugins.media.ContentFormatsTest', () => {
       '<param name="allowfullscreen" value="true">' +
       '<param name="allowscriptaccess" value="always">' +
       '<param name="flashvars" value="video_src=s">' +
-      '<!--[if IE]>' +
-      '<param name="movie" value="../../js/tinymce/plugins/media/moxieplayer.swf" />' +
-      '<![endif]-->' +
       '</object>' +
       '</video>' +
       '</p>'

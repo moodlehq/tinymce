@@ -1,16 +1,17 @@
 import { Fun, Obj, Strings, Type } from '@ephox/katamari';
 import { TableLookup } from '@ephox/snooker';
 
-import DOMUtils from 'tinymce/core/api/dom/DOMUtils';
-import Editor from 'tinymce/core/api/Editor';
-import { StyleMap } from 'tinymce/core/api/html/Styles';
-import { Dialog } from 'tinymce/core/api/ui/Ui';
+import type DOMUtils from 'tinymce/core/api/dom/DOMUtils';
+import type Editor from 'tinymce/core/api/Editor';
+import type { StyleMap } from 'tinymce/core/api/html/Styles';
+import type { Dialog } from 'tinymce/core/api/ui/Ui';
 
 import * as Styles from '../actions/Styles';
 import * as Events from '../api/Events';
 import * as Options from '../api/Options';
 import * as Utils from '../core/Utils';
 import * as TableSelection from '../selection/TableSelection';
+
 import { getAdvancedTab } from './DialogAdvancedTab';
 import * as Helpers from './Helpers';
 import * as TableDialogGeneralTab from './TableDialogGeneralTab';

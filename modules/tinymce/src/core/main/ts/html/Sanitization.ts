@@ -1,12 +1,14 @@
-import { Arr, Fun, Obj, Strings, Type } from '@ephox/katamari';
+import { Arr, Fun, Obj, Optional, Strings, Type } from '@ephox/katamari';
 import { Attribute, NodeTypes, Remove, Replication, SugarElement } from '@ephox/sugar';
-import createDompurify, { Config, DOMPurify, UponSanitizeAttributeHookEvent, UponSanitizeElementHookEvent } from 'dompurify';
+import createDompurify, { type Config, type DOMPurify, type UponSanitizeAttributeHookEvent, type UponSanitizeElementHookEvent } from 'dompurify';
 
-import { DomParserSettings } from '../api/html/DomParser';
-import Schema from '../api/html/Schema';
+import type { DomParserSettings } from '../api/html/DomParser';
+import type Schema from '../api/html/Schema';
 import Tools from '../api/util/Tools';
 import * as URI from '../api/util/URI';
 import * as NodeType from '../dom/NodeType';
+
+import * as KeepHtmlComments from './KeepHtmlComments';
 import * as Namespace from './Namespace';
 
 export type MimeType = 'text/html' | 'application/xhtml+xml';
@@ -25,9 +27,15 @@ const processNode = (node: Node, settings: DomParserSettings, schema: Schema, sc
   const validate = settings.validate;
   const specialElements = schema.getSpecialElements();
 
-  // Pad conditional comments if they aren't allowed
-  if (node.nodeType === NodeTypes.COMMENT && !settings.allow_conditional_comments && /^\[if/i.test(node.nodeValue ?? '')) {
-    node.nodeValue = ' ' + node.nodeValue;
+  if (node.nodeType === NodeTypes.COMMENT) {
+    // Pad conditional comments if they aren't allowed
+    if (!settings.allow_conditional_comments && /^\[if/i.test(node.nodeValue ?? '')) {
+      node.nodeValue = ' ' + node.nodeValue;
+    }
+
+    if (settings.sanitize && settings.allow_html_in_comments && Type.isString(node.nodeValue)) {
+      node.nodeValue = KeepHtmlComments.encodeData(node.nodeValue);
+    }
   }
 
   const lcTagName = evt?.tagName ?? node.nodeName.toLowerCase();
@@ -116,8 +124,7 @@ const processAttr = (ele: Element, settings: DomParserSettings, schema: Schema, 
 
   if (evt.keepAttr) {
     evt.allowedAttributes[attrName] = true;
-
-    if (isBooleanAttribute(attrName, schema)) {
+    if (isBooleanAttributeOfNonCustomElement(attrName, schema, ele.nodeName)) {
       evt.attrValue = attrName;
     }
 
@@ -144,8 +151,8 @@ const shouldKeepAttribute = (settings: DomParserSettings, schema: Schema, scope:
 const isRequiredAttributeOfInternalElement = (ele: Element, attrName: string): boolean =>
   ele.hasAttribute(internalElementAttr) && (attrName === 'id' || attrName === 'class' || attrName === 'style');
 
-const isBooleanAttribute = (attrName: string, schema: Schema): boolean =>
-  attrName in schema.getBoolAttrs();
+const isBooleanAttributeOfNonCustomElement = (attrName: string, schema: Schema, nodeName: string): boolean =>
+  attrName in schema.getBoolAttrs() && !Obj.has(schema.getCustomElements(), nodeName.toLowerCase());
 
 const filterAttributes = (ele: Element, settings: DomParserSettings, schema: Schema, scope: Namespace.NamespaceType): void => {
   const { attributes } = ele;
@@ -155,7 +162,7 @@ const filterAttributes = (ele: Element, settings: DomParserSettings, schema: Sch
     const attrValue = attr.value;
     if (!shouldKeepAttribute(settings, schema, scope, ele.tagName.toLowerCase(), attrName, attrValue) && !isRequiredAttributeOfInternalElement(ele, attrName)) {
       ele.removeAttribute(attrName);
-    } else if (isBooleanAttribute(attrName, schema)) {
+    } else if (isBooleanAttributeOfNonCustomElement(attrName, schema, ele.nodeName)) {
       ele.setAttribute(attrName, attrName);
     }
   }
@@ -178,17 +185,14 @@ const setupPurify = (settings: DomParserSettings, schema: Schema, namespaceTrack
 };
 
 const getPurifyConfig = (settings: DomParserSettings, mimeType: MimeType): Config => {
-  // Current dompurify types only cover up to 3.0.5 which does not include this new setting
-  const basePurifyConfig: Config & { SAFE_FOR_XML: boolean } = {
+  const basePurifyConfig: Config = {
     IN_PLACE: true,
     ALLOW_UNKNOWN_PROTOCOLS: true,
     // Deliberately ban all tags and attributes by default, and then un-ban them on demand in hooks
     // #comment and #cdata-section are always allowed as they aren't controlled via the schema
     // body is also allowed due to the DOMPurify checking the root node before sanitizing
-    ALLOWED_TAGS: [ '#comment', '#cdata-section', 'body' ],
-    ALLOWED_ATTR: [],
-    // TINY-11332: New settings for dompurify 3.1.7
-    SAFE_FOR_XML: false
+    ALLOWED_TAGS: [ '#comment', '#cdata-section', 'body', 'html' ],
+    ALLOWED_ATTR: []
   };
   const config = { ...basePurifyConfig };
 
@@ -198,7 +202,7 @@ const getPurifyConfig = (settings: DomParserSettings, mimeType: MimeType): Confi
   // Allow any URI when allowing script urls
   if (settings.allow_script_urls) {
     config.ALLOWED_URI_REGEXP = /.*/;
-  // Allow anything except javascript (or similar) URIs if all html data urls are allowed
+    // Allow anything except javascript (or similar) URIs if all html data urls are allowed
   } else if (settings.allow_html_data_urls) {
     config.ALLOWED_URI_REGEXP = /^(?!(\w+script|mhtml):)/i;
   }
@@ -239,21 +243,44 @@ const sanitizeMathmlElement = (node: Element, settings: DomParserSettings) => {
     return hasAllowedEncodings && Type.isString(encoding) && Arr.contains(allowedEncodings, encoding);
   };
 
-  purify.addHook('uponSanitizeElement', (node, evt) => {
-    const lcTagName = evt.tagName ?? node.nodeName.toLowerCase();
-
+  const isValidElementOpt = (node: Node, lcTagName: string) => {
     if (hasAllowedEncodings && lcTagName === 'semantics') {
-      evt.allowedTags[lcTagName] = true;
+      return Optional.some(true);
+    } else if (lcTagName === 'annotation') {
+      return Optional.some(NodeType.isElement(node) && hasValidEncoding(node));
+    } else if (Type.isArray(settings.extended_mathml_elements)) {
+      if (settings.extended_mathml_elements.includes(lcTagName)) {
+        return Optional.from(true);
+      } else {
+        return Optional.none();
+      }
+    } else {
+      return Optional.none();
     }
+  };
 
-    if (lcTagName === 'annotation') {
-      // We know the node is an element as we have
-      // passed an element to the purify.sanitize function below
-      const elm = node as Element;
-      const keepElement = hasValidEncoding(elm);
+  purify.addHook('uponSanitizeElement', (node, evt) => {
+    // We know the node is an element as we have
+    // passed an element to the purify.sanitize function below
+    const lcTagName = evt.tagName ?? node.nodeName.toLowerCase();
+    const keepElementOpt = isValidElementOpt(node, lcTagName);
+
+    keepElementOpt.each((keepElement) => {
       evt.allowedTags[lcTagName] = keepElement;
-      if (!keepElement) {
-        elm.remove();
+      if (!keepElement && settings.sanitize) {
+        if (NodeType.isElement(node)) {
+          node.remove();
+        }
+      }
+    });
+  });
+
+  purify.addHook('uponSanitizeAttribute', (_node, event) => {
+    if (Type.isArray(settings.extended_mathml_attributes)) {
+      const keepAttribute = settings.extended_mathml_attributes.includes(event.attrName);
+
+      if (keepAttribute) {
+        event.forceKeepAttr = true;
       }
     }
   });

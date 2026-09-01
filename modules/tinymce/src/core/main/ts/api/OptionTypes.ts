@@ -1,12 +1,13 @@
+import type { UploadHandler } from '../file/Uploader';
+import type { ExpectedUser } from '../lookup/UserLookup';
+import type { DynamicPatternsLookup, Pattern, RawDynamicPatternsLookup, RawPattern } from '../textpatterns/core/PatternTypes';
 
-import { UploadHandler } from '../file/Uploader';
-import { DynamicPatternsLookup, Pattern, RawDynamicPatternsLookup, RawPattern } from '../textpatterns/core/PatternTypes';
-import Editor from './Editor';
-import { PastePostProcessEvent, PastePreProcessEvent } from './EventTypes';
-import { Formats } from './fmt/Format';
-import { AllowedFormat } from './fmt/StyleFormat';
-import { CustomElementSpec, SchemaType } from './html/Schema';
-import { EditorUiApi, Toolbar } from './ui/Ui';
+import type Editor from './Editor';
+import type { PastePostProcessEvent, PastePreProcessEvent } from './EventTypes';
+import type { Formats } from './fmt/Format';
+import type { AllowedFormat } from './fmt/StyleFormat';
+import type { CustomElementSpec, SchemaType } from './html/Schema';
+import type { EditorUiApi, Toolbar } from './ui/Ui';
 
 export type EntityEncoding = 'named' | 'numeric' | 'raw' | 'named,numeric' | 'named+numeric' | 'numeric,named' | 'numeric+named';
 
@@ -44,6 +45,8 @@ export interface ToolbarGroup {
 
 export type ToolbarMode = 'floating' | 'sliding' | 'scrolling' | 'wrap';
 export type ToolbarLocation = 'top' | 'bottom' | 'auto';
+
+export type CrossOrigin = (url: string, resourceType: 'script' | 'stylesheet') => 'anonymous' | 'use-credentials' | undefined;
 
 interface BaseEditorOptions {
   a11y_advanced_options?: boolean;
@@ -105,8 +108,11 @@ interface BaseEditorOptions {
   end_container_on_empty_block?: boolean | string;
   entities?: string;
   entity_encoding?: EntityEncoding;
+  extended_mathml_attributes?: string[];
+  extended_mathml_elements?: string[];
   extended_valid_elements?: string;
   event_root?: string;
+  fetch_users?: (userIds: string[]) => Promise<ExpectedUser[]>;
   file_picker_callback?: FilePickerCallback;
   file_picker_types?: string;
   file_picker_validator_handler?: FilePickerValidationCallback;
@@ -157,6 +163,7 @@ interface BaseEditorOptions {
   language_load?: boolean;
   language_url?: string;
   line_height_formats?: string;
+  list_max_depth?: number;
   max_height?: number;
   max_width?: number;
   menu?: Record<string, { title: string; items: string }>;
@@ -172,6 +179,7 @@ interface BaseEditorOptions {
   noneditable_regexp?: RegExp | RegExp[];
   nowrap?: boolean;
   object_resizing?: boolean | string;
+  onboarding?: boolean;
   pad_empty_with_br?: boolean;
   paste_as_text?: boolean;
   paste_block_drop?: boolean;
@@ -189,6 +197,7 @@ interface BaseEditorOptions {
   protect?: RegExp[];
   readonly?: boolean;
   referrer_policy?: ReferrerPolicy;
+  crossorigin?: CrossOrigin;
   relative_urls?: boolean;
   remove_script_host?: boolean;
   remove_trailing_brs?: boolean;
@@ -211,6 +220,7 @@ interface BaseEditorOptions {
   style_formats_merge?: boolean;
   submit_patch?: boolean;
   suffix?: string;
+  user_id?: string;
   table_tab_navigation?: boolean;
   target?: HTMLElement;
   text_patterns?: RawPattern[] | false;
@@ -293,6 +303,7 @@ export interface EditorOptions extends NormalizedEditorOptions {
   content_css: string[];
   contextmenu: string[];
   convert_unsafe_embeds: boolean;
+  crossorigin: CrossOrigin;
   custom_colors: boolean;
   default_font_stack: string[];
   document_base_url: string;
@@ -350,6 +361,7 @@ export interface EditorOptions extends NormalizedEditorOptions {
   toolbar_sticky_offset: number;
   text_patterns: Pattern[];
   text_patterns_lookup: DynamicPatternsLookup;
+  user_id: string;
   visual: boolean;
   visual_anchor_class: string;
   visual_table_class: string;

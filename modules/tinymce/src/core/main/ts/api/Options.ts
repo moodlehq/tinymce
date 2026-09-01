@@ -1,12 +1,13 @@
-import { Arr, Obj, Strings, Type } from '@ephox/katamari';
+import { Arr, Fun, Obj, Optional, Strings, Type } from '@ephox/katamari';
 import { PlatformDetection } from '@ephox/sand';
 
 import * as Pattern from '../textpatterns/core/Pattern';
-import * as PatternTypes from '../textpatterns/core/PatternTypes';
+import type * as PatternTypes from '../textpatterns/core/PatternTypes';
+
 import DOMUtils from './dom/DOMUtils';
-import Editor from './Editor';
+import type Editor from './Editor';
 import { fireDisabledStateChange } from './Events';
-import { EditorOptions } from './OptionTypes';
+import type { EditorOptions } from './OptionTypes';
 import I18n from './util/I18n';
 import Tools from './util/Tools';
 
@@ -80,6 +81,11 @@ const register = (editor: Editor): void => {
     default: ''
   });
 
+  registerOption('crossorigin', {
+    processor: 'function',
+    default: Fun.constant(undefined)
+  });
+
   registerOption('language_load', {
     processor: 'boolean',
     default: true
@@ -102,7 +108,7 @@ const register = (editor: Editor): void => {
 
   registerOption('document_base_url', {
     processor: 'string',
-    default: editor.documentBaseUrl
+    default: editor.editorManager.documentBaseURL
   });
 
   registerOption('body_id', {
@@ -324,6 +330,14 @@ const register = (editor: Editor): void => {
     default: []
   });
 
+  registerOption('extended_mathml_attributes', {
+    processor: 'string[]'
+  });
+
+  registerOption('extended_mathml_elements', {
+    processor: 'string[]'
+  });
+
   registerOption('inline_boundaries', {
     processor: 'boolean',
     default: true
@@ -361,6 +375,15 @@ const register = (editor: Editor): void => {
   });
 
   registerOption('service_message', {
+    processor: 'string'
+  });
+
+  registerOption('onboarding', {
+    processor: 'boolean',
+    default: true
+  });
+
+  registerOption('tiny_cloud_entry_url', {
     processor: 'string'
   });
 
@@ -553,6 +576,11 @@ const register = (editor: Editor): void => {
   });
 
   registerOption('allow_html_in_named_anchor', {
+    processor: 'boolean',
+    default: false
+  });
+
+  registerOption('allow_html_in_comments', {
     processor: 'boolean',
     default: false
   });
@@ -887,6 +915,26 @@ const register = (editor: Editor): void => {
     default: true
   });
 
+  registerOption('user_id', {
+    processor: 'string',
+    default: 'Anonymous'
+  });
+
+  registerOption('fetch_users', {
+    processor: (value) => {
+      if (value === undefined) {
+        return { valid: true, value: undefined };
+      }
+      if (Type.isFunction(value)) {
+        return { valid: true, value };
+      }
+      return {
+        valid: false,
+        message: 'fetch_users must be a function that returns a Promise<ExpectedUser[]>'
+      };
+    }
+  });
+
   // These options must be registered later in the init sequence due to their default values
   editor.on('ScriptsLoaded', () => {
     registerOption('directionality', {
@@ -899,6 +947,25 @@ const register = (editor: Editor): void => {
       // Fallback to the original elements placeholder if not set in the settings
       default: DOM.getAttrib(editor.getElement(), 'placeholder')
     });
+  });
+
+  registerOption('lists_indent_on_tab', {
+    processor: 'boolean',
+    default: true
+  });
+
+  registerOption('list_max_depth', {
+    processor: (value) => {
+      const valid = Type.isNumber(value);
+      if (valid) {
+        if (value < 0) {
+          throw new Error('list_max_depth cannot be set to lower than 0');
+        }
+        return { value, valid };
+      } else {
+        return { valid: false, message: 'Must be a number' };
+      }
+    },
   });
 };
 
@@ -927,6 +994,7 @@ const getImagesUploadCredentials = option('images_upload_credentials');
 const getImagesUploadHandler = option('images_upload_handler');
 const shouldUseContentCssCors = option('content_css_cors');
 const getReferrerPolicy = option('referrer_policy');
+const getCrossOrigin = option('crossorigin');
 const getLanguageCode = option('language');
 const getLanguageUrl = option('language_url');
 const shouldIndentUseMargin = option('indent_use_margin');
@@ -1009,6 +1077,13 @@ const shouldConvertUnsafeEmbeds = option('convert_unsafe_embeds');
 const getLicenseKey = option('license_key');
 const getApiKey = option('api_key');
 const isDisabled = option('disabled');
+const getExtendedMathmlAttributes = option('extended_mathml_attributes');
+const getExtendedMathmlElements = option('extended_mathml_elements');
+const getUserId = option('user_id');
+const getFetchUsers = option('fetch_users');
+const shouldIndentOnTab = option('lists_indent_on_tab');
+const getListMaxDepth = (editor: Editor): Optional<number> =>
+  Optional.from(editor.options.get('list_max_depth'));
 
 export {
   register,
@@ -1016,6 +1091,8 @@ export {
   getIframeAttrs,
   getDocType,
   getDocumentBaseUrl,
+  getExtendedMathmlAttributes,
+  getExtendedMathmlElements,
   getBodyId,
   getBodyClass,
   getContentSecurityPolicy,
@@ -1040,6 +1117,7 @@ export {
   getImagesUploadHandler,
   shouldUseContentCssCors,
   getReferrerPolicy,
+  getCrossOrigin,
   getLanguageCode,
   getLanguageUrl,
   shouldIndentUseMargin,
@@ -1119,5 +1197,9 @@ export {
   getSandboxIframesExclusions,
   shouldConvertUnsafeEmbeds,
   getApiKey,
-  isDisabled
+  isDisabled,
+  shouldIndentOnTab,
+  getListMaxDepth,
+  getFetchUsers,
+  getUserId
 };

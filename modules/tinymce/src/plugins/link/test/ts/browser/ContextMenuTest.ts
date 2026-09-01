@@ -4,7 +4,7 @@ import { Fun } from '@ephox/katamari';
 import { SugarShadowDom } from '@ephox/sugar';
 import { TinyDom, TinyHooks, TinyUiActions } from '@ephox/wrap-mcagar';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import Plugin from 'tinymce/plugins/image/Plugin';
 
 describe('browser.tinymce.plugins.link.ContextMenuTest', () => {
@@ -41,7 +41,7 @@ describe('browser.tinymce.plugins.link.ContextMenuTest', () => {
     );
     Mouse.contextMenuOn(TinyDom.body(editor), 'a');
     await pOpenContextMenu(editor, 'a');
-    UiFinder.notExists(SugarShadowDom.getContentContainer(SugarShadowDom.getRootNode(TinyDom.targetElement(editor))), 'div[aria-label="Link..."');
+    UiFinder.notExists(SugarShadowDom.getContentContainer(SugarShadowDom.getRootNode(TinyDom.targetElement(editor))), 'div[aria-label="Link…"');
   });
 
   it('TINY-9491: Opening context not on a cef', async () => {
@@ -52,6 +52,6 @@ describe('browser.tinymce.plugins.link.ContextMenuTest', () => {
     );
     Mouse.contextMenuOn(TinyDom.body(editor), 'a');
     await pOpenContextMenu(editor, 'a');
-    UiFinder.exists(SugarShadowDom.getContentContainer(SugarShadowDom.getRootNode(TinyDom.targetElement(editor))), 'div[aria-label="Link..."');
+    UiFinder.exists(SugarShadowDom.getContentContainer(SugarShadowDom.getRootNode(TinyDom.targetElement(editor))), 'div[aria-label="Link…"');
   });
 });

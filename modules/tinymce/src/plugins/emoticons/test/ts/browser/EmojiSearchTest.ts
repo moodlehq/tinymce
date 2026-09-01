@@ -5,7 +5,7 @@ import { Attribute, SugarBody, SugarDocument } from '@ephox/sugar';
 import { TinyAssertions, TinyHooks, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import Plugin from 'tinymce/plugins/emoticons/Plugin';
 
 describe('browser.tinymce.plugins.emoticons.EmojiSearchTest', () => {
@@ -35,7 +35,7 @@ describe('browser.tinymce.plugins.emoticons.EmojiSearchTest', () => {
     await Waiter.pTryUntil(
       'Wait until rainbow is the first choice (search should filter)',
       () => {
-        const item = UiFinder.findIn(SugarBody.body(), '.tox-collection__item:first').getOrDie();
+        const item = UiFinder.findIn(SugarBody.body(), '.tox-collection__item:first-child').getOrDie();
         const value = Attribute.get(item, 'data-collection-item-value');
         assert.equal(value, '🌈', 'Search should show rainbow');
       }

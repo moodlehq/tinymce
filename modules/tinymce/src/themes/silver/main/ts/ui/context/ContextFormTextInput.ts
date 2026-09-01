@@ -1,20 +1,23 @@
-import { AddEventsBehaviour, AlloyComponent, AlloyEvents, Behaviour, Disabling, FormField, GuiFactory, Input, Keying, NativeEvents, SketchSpec } from '@ephox/alloy';
-import { InlineContent } from '@ephox/bridge';
-import { Cell, Fun, Optional } from '@ephox/katamari';
+import { AddEventsBehaviour, type AlloyComponent, AlloyEvents, Behaviour, Disabling, FormField, GuiFactory, Input, Keying, NativeEvents, type SketchSpec } from '@ephox/alloy';
+import type { InlineContent } from '@ephox/bridge';
+import { Cell, Fun, Optional, type Singleton } from '@ephox/katamari';
 import { SelectorFind } from '@ephox/sugar';
 
-import { UiFactoryBackstageProviders } from '../../backstage/Backstage';
+import type { UiFactoryBackstageProviders } from '../../backstage/Backstage';
 import * as UiState from '../../UiState';
-import { onControlAttached, onControlDetached } from '../controls/Controls';
+import { onContextFormControlDetached, onControlAttached } from '../controls/Controls';
+
 import * as ContextFormApi from './ContextFormApi';
 import * as ContextFormGroup from './ContextFormGroup';
 
 export const renderContextFormTextInput = (
   ctx: InlineContent.ContextInputForm,
   providers: UiFactoryBackstageProviders,
-  onEnter: (input: AlloyComponent) => Optional<boolean>
+  onEnter: (input: AlloyComponent) => Optional<boolean>,
+  valueState: Singleton.Value<string>
 ): SketchSpec => {
   const editorOffCell = Cell(Fun.noop);
+  const getFormApi = (comp: AlloyComponent) => ContextFormApi.getFormParentApi<string>(comp, valueState);
 
   const pLabel = ctx.label.map((label) => FormField.parts.label({
     dom: { tag: 'label', classes: [ 'tox-label' ] },
@@ -62,15 +65,15 @@ export const renderContextFormTextInput = (
             );
 
             return closestFocussableOpt.fold(
-              () => ContextFormApi.getFormApi(comp),
-              (closestFocussable) => ContextFormApi.getFormApi(comp, closestFocussable)
+              () => ContextFormApi.getFormParentApi(comp, valueState),
+              (closestFocussable) => ContextFormApi.getFormParentApi(comp, valueState, closestFocussable)
             );
           },
           onBeforeSetup: Keying.focusIn
         }, editorOffCell),
-        onControlDetached({ getApi: ContextFormApi.getFormApi }, editorOffCell),
+        onContextFormControlDetached({ getApi: getFormApi }, editorOffCell, valueState),
         AlloyEvents.run(NativeEvents.input(), (comp) => {
-          ctx.onInput(ContextFormApi.getFormApi(comp));
+          ctx.onInput(getFormApi(comp));
         })
       ])
     ])

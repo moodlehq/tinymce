@@ -5,7 +5,7 @@ import { SugarBody, SugarDocument, Value } from '@ephox/sugar';
 import { TinyHooks, TinySelections, TinyUiActions } from '@ephox/wrap-mcagar';
 import { assert } from 'chai';
 
-import Editor from 'tinymce/core/api/Editor';
+import type Editor from 'tinymce/core/api/Editor';
 import * as Conversions from 'tinymce/core/file/Conversions';
 import Plugin from 'tinymce/plugins/image/Plugin';
 
@@ -52,12 +52,12 @@ describe('browser.tinymce.plugins.image.UploadTabTest', () => {
   };
 
   const pAssertSrcTextValue = (expectedValue: string) => Waiter.pTryUntil('Waited for input to change to expected value', () => {
-    const input = UiFinder.findIn<HTMLInputElement>(SugarBody.body(), 'label.tox-label:contains("Source") + div > div > input.tox-textfield').getOrDie();
+    const input = UiFinder.findTargetByLabel<HTMLInputElement>(SugarBody.body(), 'Source').getOrDie();
     assert.equal(Value.get(input), expectedValue, 'Assert field source value ');
   }, 10, 7000);
 
   const pAssertSrcTextValueStartsWith = (expectedValue: string) => Waiter.pTryUntil('Waited for input to change to start with expected value', () => {
-    const input = UiFinder.findIn<HTMLInputElement>(SugarBody.body(), 'label.tox-label:contains("Source") + div > div > input.tox-textfield').getOrDie();
+    const input = UiFinder.findTargetByLabel<HTMLInputElement>(SugarBody.body(), 'Source').getOrDie();
     assert.isTrue(Strings.startsWith(Value.get(input), expectedValue), 'Assert field source value');
   }, 10, 7000);
 
